@@ -165,7 +165,10 @@ Dockerfiles), CI config, auth setup, and a **docs/** site (Docusaurus). Stacks
 include React, React Native, Flutter, NestJS, Laravel, Python FastAPI, and
 Python Streamlit (each with runnable boilerplate + a Dockerfile); databases
 (Postgres/MySQL/MongoDB), storage (MinIO/AWS S3), and auth (JWT/Clerk) contribute
-CLAUDE.md sections; CI (GitHub Actions / GitLab CI) drops a pipeline file.
+CLAUDE.md sections; CI (GitHub Actions / GitLab CI) drops a pipeline file. Each
+stack also **auto-installs a specialist agent** (`.claude/agents/<stack>.md`), and
+every project records its state in **`.ai-native-project.json`** so re-runs (and
+Claude) stay aware of what's set up and skip inapplicable actions.
 
 **Distribution & usage:**
 - Installed via npm; invocable as `npm create ai-native-project` / `create-ai-native-project`.
@@ -203,6 +206,8 @@ CLAUDE.md sections; CI (GitHub Actions / GitLab CI) drops a pipeline file.
 | 2026-07-10 | **New kinds:** `auth` (section ref) + `ci` (copy kind) | Auth setup + CI pipelines, registry-driven |
 | 2026-07-10 | **Per-stack Dockerfiles:** each app stack ships a `Dockerfile`; compose services use `build: .` | Real images instead of inline install; single-app assumption at root |
 | 2026-07-10 | **Runnable boilerplate:** NestJS/FastAPI/Streamlit complete; Laravel/Flutter are starters (full skeleton via their official CLIs) | Honest about hand-written vs generated scaffolding |
+| 2026-07-10 | **`.ai-native-project.json` manifest** written into every project (state: type/stacks/…/agents); `project type` immutable; existing runs merge (union) | Tool + Claude stay aware of state; avoid inapplicable/duplicate actions |
+| 2026-07-10 | **Per-stack agents auto-install:** each stack bundles `.claude/agents/<stack>.md`, copied with the stack | Selecting a stack installs its specialist agent, no extra prompt |
 
 ### 9.3 Registry (template source)
 The CLI reads skills, agents, and the CLAUDE.md template from a **git repo**,
@@ -235,7 +240,8 @@ shallow-cloned/updated into a local cache (`~/.cache/create-ai-native-project/re
   - project-types: `single`, `monorepo` (monorepo has a `package.json` base)
   - stacks (each with runnable boilerplate + Dockerfile): `react` (fully runnable),
     `node-nest`, `python-fastapi`, `python-streamlit` complete; `laravel`, `flutter`,
-    `react-native` are starters (full skeleton via their official CLIs)
+    `react-native` are starters (full skeleton via their official CLIs). Each stack
+    bundles a specialist agent at `.claude/agents/<stack>.md`.
   - databases: `postgres`, `mysql`, `mongodb` · storage: `minio`, `aws-s3`
   - auth: `jwt`, `clerk` · ci: `github-actions`, `gitlab-ci`
   - docker: `compose` base · docs: `docusaurus`
@@ -264,6 +270,7 @@ src/
     claudemd.ts       # compose CLAUDE.md (base + section refs: stack/database/storage)
     pkgjson.ts        # compose package.json (project-type base + stack fragments, first-wins)
     compose.ts        # compose docker-compose.yml (base + compose.service.yml fragments)
+    manifest.ts       # read/merge/write .ai-native-project.json (project state)
     install.ts        # detect pnpm/npm + run install
     files.ts          # write files to disk (skip existing unless overwrite)
     project.ts        # detect existing-vs-new project
@@ -287,3 +294,4 @@ tsconfig.json         # strict TS, Bundler resolution
 - 2026-07-10 — Added **runnable scaffolding** (composed `package.json`, first-wins merge; new `lib/pkgjson.ts`) + **optional dependency install** (`lib/install.ts`), and a **docs folder option** (new registry `docs/` kind + `docs/docusaurus`; kind-aware compose exclusion so the docs sub-project keeps its own package.json). Seeded registry: package.json fragments for all project-types/stacks, runnable React files, and the Docusaurus template. Verified end-to-end (merged root pkg, unpolluted docs sub-project).
 - 2026-07-10 — Added stacks (**flutter, laravel, python-fastapi, python-streamlit**), new kinds **database** (postgres/mysql/mongodb), **storage** (minio/aws-s3), and **docker** (compose). New `lib/compose.ts` composes `docker-compose.yml` from a base + `compose.service.yml` fragments; `composeClaudeMd` generalized to section refs. `create.ts` adds database/storage selection + a Docker prompt. Verified end-to-end (nest+postgres+minio+docker → valid 3-service compose, all CLAUDE.md sections). Committed via branch `feat/runnable-scaffolding-and-docs` → MR → merged to `main`.
 - 2026-07-10 — Added **runnable stack boilerplate** (NestJS/FastAPI/Streamlit complete; Laravel/Flutter starters), **per-stack Dockerfiles** (compose now `build: .`), and two new kinds: **auth** (jwt/clerk — section ref + setup) and **ci** (github-actions/gitlab-ci — copy kind). `create.ts` adds auth selection + a CI prompt. Verified end-to-end (nest+postgres+jwt+github-actions+docker: full boilerplate, Dockerfile, CI yaml, build-based compose; all parsed OK). Committed via branch `feat/dockerfiles-ci-auth-boilerplate` → MR → merged to `main`.
+- 2026-07-10 — Added **`.ai-native-project.json` manifest** (new `lib/manifest.ts`): written into every project with its state; on existing-project runs the CLI reads it, reuses the immutable project type (skips that prompt), and merges (unions) selections. Added **per-stack agents** bundled in each stack (`.claude/agents/<stack>.md`) that auto-install with the stack; installed agents/skills are derived from written paths and recorded in the manifest. Base CLAUDE.md templates now point to the manifest. Verified end-to-end (agents auto-install; manifest merge preserves createdAt + immutable type + unions arrays). Committed via branch `feat/manifest-and-stack-agents` → MR → merged to `main`.
