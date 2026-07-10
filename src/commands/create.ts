@@ -23,6 +23,9 @@ import { composeDockerCompose } from "../lib/compose.js";
 import { writeTemplateFiles, type WriteResult } from "../lib/files.js";
 import { isExistingProject } from "../lib/project.js";
 import { detectPackageManager, runInstall } from "../lib/install.js";
+import { MANIFEST_FILE, readManifest, writeManifest } from "../lib/manifest.js";
+
+const VERSION = "0.1.0";
 
 export interface CreateOptions {
   /** --boot <name>: create this folder and scaffold into it. */
@@ -81,6 +84,18 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     await mkdir(targetDir, { recursive: true });
   }
 
+  // Awareness: if this is already an ai-native project, load its manifest so we
+  // don't redo fixed choices (e.g. the project type) or re-ask what's installed.
+  const existingManifest = await readManifest(targetDir);
+  if (existingManifest) {
+    p.log.info(
+      `Detected ai-native project — type: ${pc.bold(existingManifest.projectType ?? "n/a")}` +
+        (existingManifest.stacks.length
+          ? `, stacks: ${existingManifest.stacks.join(", ")}`
+          : ""),
+    );
+  }
+
   // 2. Load everything the registry offers.
   const spin = p.spinner();
   spin.start("Loading templates from registry…");
@@ -126,8 +141,11 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   }
 
   // 3. Project type (single choice) — drives the base CLAUDE.md + package.json.
-  let projectType: string | null = null;
-  if (projectTypes.length > 0) {
+  //    Fixed once set: reuse it from the manifest instead of asking again.
+  let projectType: string | null = existingManifest?.projectType ?? null;
+  if (projectType) {
+    p.log.info(`Project type: ${pc.bold(projectType)} (from existing project)`);
+  } else if (projectTypes.length > 0) {
     const res = await p.select({
       message: "What kind of project is this?",
       options: projectTypes,
@@ -285,8 +303,43 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     }
   }
 
+  // 8. Record project state so future runs (and Claude) know what's set up.
+  const installedAgents = unionStr(selectedAgents, namesUnder(result.written, "agents", ".md"));
+  const installedSkills = unionStr(selectedSkills, namesUnder(result.written, "skills"));
+  await writeManifest(
+    targetDir,
+    {
+      projectType,
+      stacks: selectedStacks,
+      databases: selectedDatabases,
+      storage: selectedStorage,
+      auth: selectedAuth,
+      ci: selectedCi,
+      docker: wantDocker,
+      docs: selectedDocs,
+      skills: installedSkills,
+      agents: installedAgents,
+    },
+    VERSION,
+    new Date().toISOString(),
+  );
+  p.log.info(`Recorded project state in ${MANIFEST_FILE}`);
+
   const label = mode === "new" ? basename(targetDir) : "project";
   p.outro(pc.green(`Done! ${label} is now AI-native → ${targetDir}`));
+}
+
+const unionStr = (a: string[], b: string[]): string[] => [...new Set([...a, ...b])];
+
+/** Extract the names installed under `.claude/<sub>/` from written paths. */
+function namesUnder(paths: string[], sub: string, stripExt = ""): string[] {
+  const out = new Set<string>();
+  const re = new RegExp(`\\.claude/${sub}/([^/]+)`);
+  for (const path of paths) {
+    const m = path.replace(/\\/g, "/").match(re);
+    if (m) out.add(stripExt ? m[1].replace(new RegExp(`\\${stripExt}$`), "") : m[1]);
+  }
+  return [...out];
 }
 
 async function pickMany(
