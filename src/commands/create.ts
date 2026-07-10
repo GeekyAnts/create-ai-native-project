@@ -4,6 +4,8 @@ import * as p from "@clack/prompts";
 import pc from "picocolors";
 import {
   listAgents,
+  listAuth,
+  listCi,
   listDatabases,
   listDocs,
   listProjectTypes,
@@ -38,7 +40,9 @@ type CopyKind =
   | "stack"
   | "database"
   | "storage"
+  | "auth"
   | "docker"
+  | "ci"
   | "docs"
   | "skill"
   | "agent";
@@ -84,25 +88,32 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   let stacks: Option[] = [];
   let databases: Option[] = [];
   let storage: Option[] = [];
+  let authOptions: Option[] = [];
+  let ciOptions: Option[] = [];
   let docsOptions: Option[] = [];
   let skillOptions: Option[] = [];
   let agentOptions: Option[] = [];
   let dockerBaseId: string | null = null;
   try {
-    const [pts, sts, dbs, sto, dockers, docs, sk, ag] = await Promise.all([
-      listProjectTypes(),
-      listStacks(),
-      listDatabases(),
-      listStorage(),
-      listTemplates("docker"),
-      listDocs(),
-      listSkills(),
-      listAgents(),
-    ]);
+    const [pts, sts, dbs, sto, auth, ci, dockers, docs, sk, ag] =
+      await Promise.all([
+        listProjectTypes(),
+        listStacks(),
+        listDatabases(),
+        listStorage(),
+        listAuth(),
+        listCi(),
+        listTemplates("docker"),
+        listDocs(),
+        listSkills(),
+        listAgents(),
+      ]);
     projectTypes = toOptions(pts);
     stacks = toOptions(sts);
     databases = toOptions(dbs);
     storage = toOptions(sto);
+    authOptions = toOptions(auth);
+    ciOptions = toOptions(ci);
     docsOptions = toOptions(docs);
     skillOptions = toOptions(sk);
     agentOptions = toOptions(ag);
@@ -133,6 +144,8 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   if (selectedDatabases === null) return p.cancel("Cancelled.");
   const selectedStorage = await pickMany("storage option(s)", storage, false);
   if (selectedStorage === null) return p.cancel("Cancelled.");
+  const selectedAuth = await pickMany("auth option(s)", authOptions, false);
+  if (selectedAuth === null) return p.cancel("Cancelled.");
 
   // 5. Skills & agents.
   const selectedSkills = await pickMany("skills", skillOptions, false);
@@ -160,7 +173,29 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     }
   }
 
-  // 5c. Optional Docker (docker-compose composed from the selections above).
+  // 5c. Optional CI configuration (single provider).
+  let selectedCi: string[] = [];
+  if (ciOptions.length > 0) {
+    const wantCi = await p.confirm({
+      message: "Add CI configuration?",
+      initialValue: false,
+    });
+    if (p.isCancel(wantCi)) return p.cancel("Cancelled.");
+    if (wantCi) {
+      if (ciOptions.length === 1) {
+        selectedCi = [ciOptions[0].value];
+      } else {
+        const res = await p.select({
+          message: "Select a CI provider:",
+          options: ciOptions,
+        });
+        if (p.isCancel(res)) return p.cancel("Cancelled.");
+        selectedCi = [res as string];
+      }
+    }
+  }
+
+  // 5d. Optional Docker (docker-compose composed from the selections above).
   let wantDocker = false;
   if (dockerBaseId) {
     const res = await p.confirm({
@@ -182,6 +217,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     ...selectedStacks.map((id) => ({ kind: "stack" as const, id })),
     ...selectedDatabases.map((id) => ({ kind: "database" as const, id })),
     ...selectedStorage.map((id) => ({ kind: "storage" as const, id })),
+    ...selectedAuth.map((id) => ({ kind: "auth" as const, id })),
   ];
 
   // 6. Write. In an existing project we never overwrite user files.
@@ -210,6 +246,8 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     for (const id of selectedStacks) merge(result, await copy("stack", id, targetDir, overwrite));
     for (const id of selectedDatabases) merge(result, await copy("database", id, targetDir, overwrite));
     for (const id of selectedStorage) merge(result, await copy("storage", id, targetDir, overwrite));
+    for (const id of selectedAuth) merge(result, await copy("auth", id, targetDir, overwrite));
+    for (const id of selectedCi) merge(result, await copy("ci", id, targetDir, overwrite));
     for (const id of selectedDocs) merge(result, await copy("docs", id, targetDir, overwrite));
     for (const id of selectedSkills) merge(result, await copy("skill", id, targetDir, overwrite));
     for (const id of selectedAgents) merge(result, await copy("agent", id, targetDir, overwrite));

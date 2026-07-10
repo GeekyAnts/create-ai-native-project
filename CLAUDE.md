@@ -155,15 +155,17 @@ A **CLI tool** (`create-ai-native-project`) that helps users make a project
 - **CLAUDE.md** — *composed* from the project type (base) + each stack (sections).
 
 **Interactive flow:** target (new/existing/`--boot`) → project type (single) →
-tech stack(s) → database(s) → storage → skills → agents → docs folder?
-(Docusaurus) → Docker? → generate → optional dependency install.
+tech stack(s) → database(s) → storage → auth → skills → agents → CI? →
+docs folder? (Docusaurus) → Docker? → generate → optional dependency install.
 
 Beyond CLAUDE.md + `.claude/`, it composes a runnable **package.json** (project
 type base + stack deps/scripts), an optional **docker-compose.yml** (services
-from the chosen stacks/databases/storage), and can scaffold a **docs/** site
-(Docusaurus). Stacks include React, React Native, Flutter, NestJS, Laravel,
-Python FastAPI, and Python Streamlit; databases (Postgres/MySQL/MongoDB) and
-storage (MinIO/AWS S3) contribute CLAUDE.md sections + compose services.
+from the chosen stacks/databases/storage, `build: .` against per-stack
+Dockerfiles), CI config, auth setup, and a **docs/** site (Docusaurus). Stacks
+include React, React Native, Flutter, NestJS, Laravel, Python FastAPI, and
+Python Streamlit (each with runnable boilerplate + a Dockerfile); databases
+(Postgres/MySQL/MongoDB), storage (MinIO/AWS S3), and auth (JWT/Clerk) contribute
+CLAUDE.md sections; CI (GitHub Actions / GitLab CI) drops a pipeline file.
 
 **Distribution & usage:**
 - Installed via npm; invocable as `npm create ai-native-project` / `create-ai-native-project`.
@@ -197,7 +199,10 @@ storage (MinIO/AWS S3) contribute CLAUDE.md sections + compose services.
 | 2026-07-10 | **Docs option:** confirm → registry `docs/` kind (e.g. Docusaurus) copied into project `docs/` as a self-contained sub-project | Docs live in their own folder; their package.json is copied, not merged |
 | 2026-07-10 | **New kinds:** `database`, `storage`, `docker` (registry-driven, like stacks) | Extensible categories without a CLI release |
 | 2026-07-10 | **Docker option:** confirm → compose `docker-compose.yml` (text-based, like CLAUDE.md) from a `docker/compose` base + each selection's `compose.service.yml` | Avoids a YAML dependency; services follow the choices |
-| 2026-07-10 | **Sections generalized:** CLAUDE.md sections come from any ref (stack/database/storage), not just stacks | One composer for all section sources |
+| 2026-07-10 | **Sections generalized:** CLAUDE.md sections come from any ref (stack/database/storage/auth), not just stacks | One composer for all section sources |
+| 2026-07-10 | **New kinds:** `auth` (section ref) + `ci` (copy kind) | Auth setup + CI pipelines, registry-driven |
+| 2026-07-10 | **Per-stack Dockerfiles:** each app stack ships a `Dockerfile`; compose services use `build: .` | Real images instead of inline install; single-app assumption at root |
+| 2026-07-10 | **Runnable boilerplate:** NestJS/FastAPI/Streamlit complete; Laravel/Flutter are starters (full skeleton via their official CLIs) | Honest about hand-written vs generated scaffolding |
 
 ### 9.3 Registry (template source)
 The CLI reads skills, agents, and the CLAUDE.md template from a **git repo**,
@@ -213,27 +218,32 @@ shallow-cloned/updated into a local cache (`~/.cache/create-ai-native-project/re
   stacks/<id>/         → setup files → project root; CLAUDE.section.md + compose.service.yml + package.json
   databases/<id>/      → CLAUDE.section.md + compose.service.yml (postgres/mysql/mongodb)
   storage/<id>/        → CLAUDE.section.md + compose.service.yml (minio/aws-s3)
+  auth/<id>/           → CLAUDE.section.md + setup files (jwt/clerk)
   docker/<id>/         → docker-compose.yml base (composed) + verbatim extras (.dockerignore)
+  ci/<id>/             → pipeline file copied verbatim (github-actions → .github/workflows/ci.yml; gitlab-ci → .gitlab-ci.yml)
   docs/<id>/           → copied to project docs/ (self-contained sub-project, e.g. Docusaurus)
   skills/<id>/         → copied to .claude/skills/<id>/
   agents/<id>/         → copied to .claude/agents/
   claude/<id>/         → base CLAUDE.md fallback (e.g. claude/default/CLAUDE.md)
   ```
   **Composed (not copied verbatim):** `template.json` (all kinds);
-  `CLAUDE.section.md` + `compose.service.yml` (project-type/stack/database/storage);
+  `CLAUDE.section.md` + `compose.service.yml` (project-type/stack/database/storage/auth);
   `CLAUDE.md` + `package.json` (project-type/stack); `docker-compose.yml` (docker).
   Everything else is copied — so a `docs/` template keeps its own `package.json`,
-  and `requirements.txt` / configs drop in as setup files.
+  and `requirements.txt` / Dockerfiles / CI files drop in as setup files.
 - **Status:** ✅ seeded (branch `main`):
   - project-types: `single`, `monorepo` (monorepo has a `package.json` base)
-  - stacks: `react` (fully runnable), `react-native`, `flutter`, `node-nest`,
-    `laravel`, `python-fastapi`, `python-streamlit`
+  - stacks (each with runnable boilerplate + Dockerfile): `react` (fully runnable),
+    `node-nest`, `python-fastapi`, `python-streamlit` complete; `laravel`, `flutter`,
+    `react-native` are starters (full skeleton via their official CLIs)
   - databases: `postgres`, `mysql`, `mongodb` · storage: `minio`, `aws-s3`
+  - auth: `jwt`, `clerk` · ci: `github-actions`, `gitlab-ci`
   - docker: `compose` base · docs: `docusaurus`
   - skills: `knowledge-base` · agents: `code-reviewer` · `claude/default` fallback
-  - Verified end-to-end (single + node-nest + postgres + minio + docker): composed
-    CLAUDE.md (all 3 sections), merged `package.json`, and a valid 3-service
-    `docker-compose.yml` (parsed OK). Earlier: react runnable + docusaurus sub-project.
+  - Verified end-to-end (single + node-nest + postgres + jwt + github-actions +
+    docker): composed CLAUDE.md (all sections), full NestJS boilerplate, root
+    Dockerfile, `.github/workflows/ci.yml`, and a `docker-compose.yml` using
+    `build: .` — all YAML/JSON parsed OK.
 
 ### 9.3.1 Open Questions / Follow-ups
 - Distribution: publish flow to npm (unscoped `create-ai-native-project`).
@@ -276,3 +286,4 @@ tsconfig.json         # strict TS, Bundler resolution
 - 2026-07-10 — Added **project-type** + **tech-stack** selection (registry-driven) and **CLAUDE.md composition** (project-type base + stack sections). New `lib/claudemd.ts`; `templates.ts` gained kinds `project-type`/`stack`, `readTemplateFile`, and compose-file exclusion. Seeded registry with `single`/`monorepo` project-types and `react`/`node-nest`/`react-native` stacks. Verified end-to-end (composition + setup-file copy). Typecheck + build pass.
 - 2026-07-10 — Added **runnable scaffolding** (composed `package.json`, first-wins merge; new `lib/pkgjson.ts`) + **optional dependency install** (`lib/install.ts`), and a **docs folder option** (new registry `docs/` kind + `docs/docusaurus`; kind-aware compose exclusion so the docs sub-project keeps its own package.json). Seeded registry: package.json fragments for all project-types/stacks, runnable React files, and the Docusaurus template. Verified end-to-end (merged root pkg, unpolluted docs sub-project).
 - 2026-07-10 — Added stacks (**flutter, laravel, python-fastapi, python-streamlit**), new kinds **database** (postgres/mysql/mongodb), **storage** (minio/aws-s3), and **docker** (compose). New `lib/compose.ts` composes `docker-compose.yml` from a base + `compose.service.yml` fragments; `composeClaudeMd` generalized to section refs. `create.ts` adds database/storage selection + a Docker prompt. Verified end-to-end (nest+postgres+minio+docker → valid 3-service compose, all CLAUDE.md sections). Committed via branch `feat/runnable-scaffolding-and-docs` → MR → merged to `main`.
+- 2026-07-10 — Added **runnable stack boilerplate** (NestJS/FastAPI/Streamlit complete; Laravel/Flutter starters), **per-stack Dockerfiles** (compose now `build: .`), and two new kinds: **auth** (jwt/clerk — section ref + setup) and **ci** (github-actions/gitlab-ci — copy kind). `create.ts` adds auth selection + a CI prompt. Verified end-to-end (nest+postgres+jwt+github-actions+docker: full boilerplate, Dockerfile, CI yaml, build-based compose; all parsed OK). Committed via branch `feat/dockerfiles-ci-auth-boilerplate` → MR → merged to `main`.
