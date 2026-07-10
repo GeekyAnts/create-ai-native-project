@@ -182,6 +182,8 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
       databases,
       storage,
       authOptions,
+      ciOptions,
+      dockerBaseId,
       docsOptions,
       skillOptions,
       agentOptions,
@@ -396,6 +398,8 @@ interface MonorepoContext {
   databases: Option[];
   storage: Option[];
   authOptions: Option[];
+  ciOptions: Option[];
+  dockerBaseId: string | null;
   docsOptions: Option[];
   skillOptions: Option[];
   agentOptions: Option[];
@@ -479,6 +483,29 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
     }
   }
 
+  // CI (per-app jobs) — single provider.
+  let selectedCi: string[] = [];
+  if (ctx.ciOptions.length > 0) {
+    const wantCi = await p.confirm({ message: "Add CI configuration (a job per app)?", initialValue: false });
+    if (p.isCancel(wantCi)) return p.cancel("Cancelled.");
+    if (wantCi) {
+      if (ctx.ciOptions.length === 1) selectedCi = [ctx.ciOptions[0].value];
+      else {
+        const res = await p.select({ message: "Select a CI provider:", options: ctx.ciOptions });
+        if (p.isCancel(res)) return p.cancel("Cancelled.");
+        selectedCi = [res as string];
+      }
+    }
+  }
+
+  // Docker (per-app services + shared db/storage).
+  let wantDocker = false;
+  if (ctx.dockerBaseId) {
+    const res = await p.confirm({ message: "Use Docker (a service per app + databases/storage)?", initialValue: false });
+    if (p.isCancel(res)) return p.cancel("Cancelled.");
+    wantDocker = res;
+  }
+
   const includeClaudeMd = await p.confirm({
     message: "Generate CLAUDE.md (composed from the workspace + apps)?",
     initialValue: true,
@@ -509,6 +536,9 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
         skills,
         agents,
         includeClaudeMd,
+        ci: selectedCi,
+        docker: wantDocker,
+        dockerBaseId: ctx.dockerBaseId,
       },
       overwrite,
     );
@@ -535,8 +565,8 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
       databases: selectedDatabases,
       storage: selectedStorage,
       auth: selectedAuth,
-      ci: [],
-      docker: false,
+      ci: selectedCi,
+      docker: wantDocker,
       docs: selectedDocs,
       skills: unionStr(selectedSkills, namesUnder(result.written, "skills")),
       agents: unionStr(selectedAgents, namesUnder(result.written, "agents", ".md")),

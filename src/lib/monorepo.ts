@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { fetchTemplate, readTemplateFile, type TemplateRef } from "./templates.js";
 import { composePackageJson } from "./pkgjson.js";
 import { writeTemplateFiles, type WriteResult } from "./files.js";
+import type { ComposedFile } from "./ci.js";
 import type { AppEntry } from "./manifest.js";
 
 export interface MonorepoPlan {
@@ -16,7 +17,15 @@ export interface MonorepoPlan {
   skills: string[];
   agents: string[];
   includeClaudeMd: boolean;
+  /** CI provider ids to compose per-app pipelines for. */
+  ci: string[];
+  /** Compose a docker-compose.yml (app services + db/storage). */
+  docker: boolean;
+  dockerBaseId: string | null;
 }
+
+/** Unique, stable job/service name for an app. */
+const appId = (a: AppEntry): string => `${a.group}-${a.name}`;
 
 const appDir = (a: AppEntry): string => join("apps", a.group, a.name);
 
@@ -45,6 +54,116 @@ export async function composeMonorepoClaudeMd(
     if (sec && sec.trim().length > 0) out += "\n\n" + sec.trim();
   }
   return out + "\n";
+}
+
+// ---- Per-app Docker & CI composition (transforms on stack fragments) --------
+
+/** Rewrite a stack's compose service for a monorepo app: name, build context, host port. */
+function transformDockerService(
+  fragment: string,
+  service: string,
+  context: string,
+  hostPort: number,
+  containerPort: number,
+): string {
+  const lines = fragment.replace(/\s+$/, "").split("\n");
+  lines[0] = `  ${service}:`;
+  return lines
+    .join("\n")
+    .replace(/build:\s*\./, `build: ${context}`)
+    .replace(/-\s*"\d+:\d+"/, `- "${hostPort}:${containerPort}"`);
+}
+
+/** Rewrite a stack's GitHub job: unique name + run steps scoped to the app dir. */
+function transformGithubJob(fragment: string, job: string, dir: string): string {
+  const lines = fragment.replace(/\s+$/, "").split("\n");
+  lines[0] = `  ${job}:`;
+  lines.splice(1, 0, "    defaults:", "      run:", `        working-directory: ${dir}`);
+  return lines.join("\n");
+}
+
+/** Rewrite a stack's GitLab job: unique name + `cd` into the app dir first. */
+function transformGitlabJob(fragment: string, job: string, dir: string): string {
+  const lines = fragment.replace(/\s+$/, "").split("\n");
+  lines[0] = `${job}:`;
+  return lines.join("\n").replace(/\n  script:\n/, `\n  script:\n    - cd ${dir}\n`);
+}
+
+/**
+ * Compose docker-compose.yml for a monorepo: one build-based service per app
+ * (context = app dir, collision-free host port) plus the workspace databases/
+ * storage services (image-based, unchanged).
+ */
+export async function composeMonorepoDockerCompose(
+  baseId: string,
+  apps: AppEntry[],
+  sectionRefs: TemplateRef[],
+): Promise<ComposedFile | null> {
+  const base = await readTemplateFile("docker", baseId, "docker-compose.yml");
+  if (base === null) return null;
+
+  const usedPorts = new Set<number>();
+  const infra: string[] = [];
+  for (const ref of sectionRefs) {
+    const frag = await readTemplateFile(ref.kind, ref.id, "compose.service.yml");
+    if (!frag) continue;
+    for (const m of frag.matchAll(/"(\d+):\d+"/g)) usedPorts.add(Number(m[1]));
+    infra.push(frag.replace(/\s+$/, ""));
+  }
+
+  const appServices: string[] = [];
+  for (const app of apps) {
+    const frag = await readTemplateFile("stack", app.stack, "compose.service.yml");
+    if (!frag) continue; // mobile stacks have no service
+    const m = frag.match(/"(\d+):(\d+)"/);
+    const desired = m ? Number(m[1]) : 8000;
+    const container = m ? Number(m[2]) : desired;
+    let host = desired;
+    while (usedPorts.has(host)) host++;
+    usedPorts.add(host);
+    appServices.push(
+      transformDockerService(frag, appId(app), `./apps/${app.group}/${app.name}`, host, container),
+    );
+  }
+
+  let out = base.replace(/\s+$/, "");
+  for (const block of [...appServices, ...infra]) out += "\n" + block;
+  return { path: "docker-compose.yml", contents: out + "\n" };
+}
+
+/**
+ * Compose a CI pipeline for a monorepo: the provider base + one job per app,
+ * each scoped to the app's directory.
+ */
+export async function composeMonorepoCi(
+  providerId: string,
+  apps: AppEntry[],
+): Promise<ComposedFile | null> {
+  const manifestRaw = await readTemplateFile("ci", providerId, "template.json");
+  let compose: { base?: string; fragment?: string } | undefined;
+  if (manifestRaw) {
+    try {
+      compose = JSON.parse(manifestRaw).compose;
+    } catch {
+      compose = undefined;
+    }
+  }
+  if (!compose?.base || !compose.fragment) return null;
+
+  const base = await readTemplateFile("ci", providerId, compose.base);
+  if (base === null) return null;
+
+  const isGithub = compose.fragment === "ci.github.yml";
+  let out = base.replace(/\s+$/, "");
+  for (const app of apps) {
+    const frag = await readTemplateFile("stack", app.stack, compose.fragment);
+    if (!frag || frag.trim().length === 0) continue;
+    const dir = `apps/${app.group}/${app.name}`;
+    out += "\n" + (isGithub
+      ? transformGithubJob(frag, appId(app), dir)
+      : transformGitlabJob(frag, appId(app), dir));
+  }
+  return { path: compose.base, contents: out + "\n" };
 }
 
 /**
@@ -102,6 +221,22 @@ export async function scaffoldMonorepo(
   }
 
   for (const app of plan.apps) mergeWR(result, await installApp(targetDir, app, overwrite));
+
+  // Docker: per-app services (build context + unique host port) + db/storage.
+  if (plan.docker && plan.dockerBaseId) {
+    const compose = await composeMonorepoDockerCompose(plan.dockerBaseId, plan.apps, plan.sectionRefs);
+    if (compose) {
+      mergeWR(result, await writeTemplateFiles(targetDir, [{ path: compose.path, contents: compose.contents }], { overwrite }));
+    }
+  }
+
+  // CI: per-app jobs scoped to each app directory.
+  for (const providerId of plan.ci) {
+    const composed = await composeMonorepoCi(providerId, plan.apps);
+    if (composed) {
+      mergeWR(result, await writeTemplateFiles(targetDir, [{ path: composed.path, contents: composed.contents }], { overwrite }));
+    }
+  }
 
   // Workspace-level extras.
   for (const id of plan.docs) mergeWR(result, await writeTemplateFiles(targetDir, await fetchTemplate("docs", id), { overwrite }));
