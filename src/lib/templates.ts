@@ -34,12 +34,27 @@ const exec = promisify(execFile);
 export type TemplateKind =
   | "project-type"
   | "stack"
+  | "docs"
   | "skill"
   | "agent"
   | "claude";
 
-/** Files handled by the CLAUDE.md composer — never copied verbatim. */
-const COMPOSE_FILES = new Set(["template.json", "CLAUDE.md", "CLAUDE.section.md"]);
+/**
+ * Files handled by a composer rather than copied verbatim. `template.json`
+ * (picker metadata) is always withheld. For project-types & stacks, the CLAUDE.md
+ * and package.json composers also own `CLAUDE.md`, `CLAUDE.section.md`, and
+ * `package.json`. Other kinds (docs/skills/agents) copy those verbatim — e.g. a
+ * `docs/` template is a self-contained sub-project with its own package.json.
+ */
+function isComposeFile(kind: TemplateKind, rel: string): boolean {
+  if (rel === "template.json") return true;
+  if (kind === "project-type" || kind === "stack") {
+    return (
+      rel === "CLAUDE.md" || rel === "CLAUDE.section.md" || rel === "package.json"
+    );
+  }
+  return false;
+}
 
 export interface TemplateMeta {
   id: string;
@@ -65,6 +80,7 @@ const CACHE_DIR = join(homedir(), ".cache", "create-ai-native-project", "registr
 const KIND_DIR: Record<TemplateKind, string> = {
   "project-type": "project-types",
   stack: "stacks",
+  docs: "docs",
   skill: "skills",
   agent: "agents",
   claude: "claude",
@@ -74,6 +90,7 @@ const KIND_DIR: Record<TemplateKind, string> = {
 const TARGET_ROOT: Record<TemplateKind, (id: string) => string> = {
   "project-type": () => "",
   stack: () => "",
+  docs: () => "docs",
   skill: (id) => join(".claude", "skills", id),
   agent: () => join(".claude", "agents"),
   claude: () => "",
@@ -176,6 +193,7 @@ export async function listTemplates(kind: TemplateKind): Promise<TemplateMeta[]>
 
 export const listProjectTypes = () => listTemplates("project-type");
 export const listStacks = () => listTemplates("stack");
+export const listDocs = () => listTemplates("docs");
 export const listSkills = () => listTemplates("skill");
 export const listAgents = () => listTemplates("agent");
 
@@ -198,7 +216,7 @@ export async function fetchTemplate(
   const relPaths = await walk(tplDir);
   const files: TemplateFile[] = [];
   for (const rel of relPaths) {
-    if (COMPOSE_FILES.has(rel)) continue;
+    if (isComposeFile(kind, rel)) continue;
     const contents = await readFile(join(tplDir, rel), "utf8");
     files.push({ path: targetRoot ? join(targetRoot, rel) : rel, contents });
   }

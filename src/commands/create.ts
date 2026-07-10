@@ -4,6 +4,7 @@ import * as p from "@clack/prompts";
 import pc from "picocolors";
 import {
   listAgents,
+  listDocs,
   listProjectTypes,
   listSkills,
   listStacks,
@@ -11,8 +12,10 @@ import {
   type TemplateMeta,
 } from "../lib/templates.js";
 import { composeClaudeMd } from "../lib/claudemd.js";
+import { composePackageJson } from "../lib/pkgjson.js";
 import { writeTemplateFiles, type WriteResult } from "../lib/files.js";
 import { isExistingProject } from "../lib/project.js";
+import { detectPackageManager, runInstall } from "../lib/install.js";
 
 export interface CreateOptions {
   /** --boot <name>: create this folder and scaffold into it. */
@@ -64,17 +67,20 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   spin.start("Loading templates from registry…");
   let projectTypes: Option[] = [];
   let stacks: Option[] = [];
+  let docsOptions: Option[] = [];
   let skillOptions: Option[] = [];
   let agentOptions: Option[] = [];
   try {
-    const [pts, sts, sk, ag] = await Promise.all([
+    const [pts, sts, docs, sk, ag] = await Promise.all([
       listProjectTypes(),
       listStacks(),
+      listDocs(),
       listSkills(),
       listAgents(),
     ]);
     projectTypes = toOptions(pts);
     stacks = toOptions(sts);
+    docsOptions = toOptions(docs);
     skillOptions = toOptions(sk);
     agentOptions = toOptions(ag);
     spin.stop("Loaded template registry.");
@@ -104,6 +110,27 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   const selectedAgents = await pickMany("agents", agentOptions, false);
   if (selectedAgents === null) return p.cancel("Cancelled.");
 
+  // 5b. Optional docs folder (e.g. Docusaurus).
+  let selectedDocs: string[] = [];
+  if (docsOptions.length > 0) {
+    const label =
+      docsOptions.length === 1 ? ` with ${docsOptions[0].label}` : "";
+    const wantDocs = await p.confirm({
+      message: `Set up a docs folder${label}?`,
+      initialValue: false,
+    });
+    if (p.isCancel(wantDocs)) return p.cancel("Cancelled.");
+    if (wantDocs) {
+      if (docsOptions.length === 1) {
+        selectedDocs = [docsOptions[0].value];
+      } else {
+        const picked = await pickMany("docs setup", docsOptions, true);
+        if (picked === null) return p.cancel("Cancelled.");
+        selectedDocs = picked;
+      }
+    }
+  }
+
   const includeClaudeMd = await p.confirm({
     message: "Generate CLAUDE.md (composed from project type + stacks)?",
     initialValue: true,
@@ -115,6 +142,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   const build = p.spinner();
   build.start("Scaffolding…");
   const result: WriteResult = { written: [], skipped: [] };
+  const pkgPath = resolve(targetDir, "package.json");
   try {
     if (includeClaudeMd) {
       const claudeMd = await composeClaudeMd(projectType, selectedStacks);
@@ -129,8 +157,21 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
         );
       }
     }
+    // Runnable scaffolding: composed package.json (deps + scripts).
+    const pkgJson = await composePackageJson(basename(targetDir), projectType, selectedStacks);
+    if (pkgJson) {
+      merge(
+        result,
+        await writeTemplateFiles(
+          targetDir,
+          [{ path: "package.json", contents: pkgJson }],
+          { overwrite },
+        ),
+      );
+    }
     if (projectType) merge(result, await copy("project-type", projectType, targetDir, overwrite));
     for (const id of selectedStacks) merge(result, await copy("stack", id, targetDir, overwrite));
+    for (const id of selectedDocs) merge(result, await copy("docs", id, targetDir, overwrite));
     for (const id of selectedSkills) merge(result, await copy("skill", id, targetDir, overwrite));
     for (const id of selectedAgents) merge(result, await copy("agent", id, targetDir, overwrite));
     build.stop(`Wrote ${result.written.length} file(s).`);
@@ -145,6 +186,26 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
       `Skipped ${result.skipped.length} existing file(s):\n` +
         result.skipped.map((f) => `  ${pc.dim(f)}`).join("\n"),
     );
+  }
+
+  // 7. Optional dependency install (only if we actually wrote package.json).
+  if (result.written.includes(pkgPath)) {
+    const doInstall = await p.confirm({
+      message: "Install dependencies now?",
+      initialValue: false,
+    });
+    if (!p.isCancel(doInstall) && doInstall) {
+      const pm = await detectPackageManager();
+      const s = p.spinner();
+      s.start(`Installing dependencies with ${pm}…`);
+      try {
+        await runInstall(targetDir, pm);
+        s.stop(`Dependencies installed with ${pm}.`);
+      } catch (err) {
+        s.stop(pc.yellow(`Install failed — run \`${pm} install\` manually.`));
+        p.log.warn(String(err instanceof Error ? err.message : err));
+      }
+    }
   }
 
   const label = mode === "new" ? basename(targetDir) : "project";
@@ -167,7 +228,7 @@ async function pickMany(
 }
 
 async function copy(
-  kind: "project-type" | "stack" | "skill" | "agent",
+  kind: "project-type" | "stack" | "docs" | "skill" | "agent",
   id: string,
   targetDir: string,
   overwrite: boolean,

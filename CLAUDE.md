@@ -155,7 +155,11 @@ A **CLI tool** (`create-ai-native-project`) that helps users make a project
 - **CLAUDE.md** — *composed* from the project type (base) + each stack (sections).
 
 **Interactive flow:** target (new/existing/`--boot`) → project type (single) →
-tech stack(s) (multi) → skills (multi) → agents (multi) → generate.
+tech stack(s) (multi) → skills (multi) → agents (multi) → docs folder? (Docusaurus)
+→ generate → optional dependency install.
+
+Beyond CLAUDE.md + `.claude/`, it composes a runnable **package.json** (project
+type base + stack deps/scripts) and can scaffold a **docs/** site (Docusaurus).
 
 **Distribution & usage:**
 - Installed via npm; invocable as `npm create ai-native-project` / `create-ai-native-project`.
@@ -183,7 +187,10 @@ tech stack(s) (multi) → skills (multi) → agents (multi) → generate.
 | 2026-07-10 | **Registry cache:** clone-on-first-use, no auto-pull; `update` forces refresh | Fast & offline-friendly                   |
 | 2026-07-10 | **Project types & stacks** come from the registry (`project-types/`, `stacks/`) | Extensible without shipping a new CLI      |
 | 2026-07-10 | **CLAUDE.md is composed:** project-type `CLAUDE.md` (base) + each stack's `CLAUDE.section.md` (appended) | One coherent file tailored to the choices  |
-| 2026-07-10 | **Compose files** (`CLAUDE.md`, `CLAUDE.section.md`, `template.json`) are not copied verbatim; all other template files are | Clean separation of "compose" vs "setup" files |
+| 2026-07-10 | **Compose files** are kind-aware: `template.json` always withheld; for project-type/stack also `CLAUDE.md`, `CLAUDE.section.md`, `package.json` | Clean separation of "compose" vs "setup" files; docs sub-projects keep their own package.json |
+| 2026-07-10 | **Runnable scaffolding:** compose `package.json` = project-type base + each stack's fragment, merged **first-wins** (per key/dep/script) | Deps + scripts tailored to the choices; safe multi-stack merge |
+| 2026-07-10 | **Optional install:** after writing, offer `pnpm`/`npm install` (default No, only if package.json was written) | Makes the project runnable in one step, without forcing network |
+| 2026-07-10 | **Docs option:** confirm → registry `docs/` kind (e.g. Docusaurus) copied into project `docs/` as a self-contained sub-project | Docs live in their own folder; their package.json is copied, not merged |
 
 ### 9.3 Registry (template source)
 The CLI reads skills, agents, and the CLAUDE.md template from a **git repo**,
@@ -195,25 +202,31 @@ shallow-cloned/updated into a local cache (`~/.cache/create-ai-native-project/re
   - `.env` is gitignored; `.env.example` is committed as the reference.
 - **Repo layout** (each `<id>/` may include `template.json` = `{ name, description }`, not copied):
   ```
-  project-types/<id>/  → setup files copied to project root; CLAUDE.md = base
-  stacks/<id>/         → setup files copied to project root; CLAUDE.section.md appended
+  project-types/<id>/  → setup files → project root; CLAUDE.md = base; package.json = base
+  stacks/<id>/         → setup files → project root; CLAUDE.section.md appended; package.json merged
+  docs/<id>/           → copied to project docs/ (self-contained sub-project, e.g. Docusaurus)
   skills/<id>/         → copied to .claude/skills/<id>/
   agents/<id>/         → copied to .claude/agents/
   claude/<id>/         → base CLAUDE.md fallback (e.g. claude/default/CLAUDE.md)
   ```
-  **Compose files** — `CLAUDE.md` (project-type base), `CLAUDE.section.md` (stack
-  section), `template.json` — are handled by the composer, not copied verbatim.
-- **Status:** ✅ seeded (branch `main`): project-types `single` + `monorepo`;
-  stacks `react`, `node-nest`, `react-native`; `skills/knowledge-base`;
-  `agents/code-reviewer`; `claude/default` fallback. Verified end-to-end:
-  monorepo + react + node-nest → composed CLAUDE.md (base + both sections) plus
-  setup files (`pnpm-workspace.yaml`, `docs/stacks/*`) and `.claude/` assets.
+  **Composed (not copied)** for project-type/stack: `CLAUDE.md`, `CLAUDE.section.md`,
+  `package.json`, `template.json`. Other kinds only withhold `template.json` — so a
+  `docs/` template keeps its own `package.json`.
+- **Status:** ✅ seeded (branch `main`): project-types `single` + `monorepo`
+  (with `package.json` bases); stacks `react` (fully runnable: vite/ts config +
+  entry), `node-nest`, `react-native` (each with `package.json` + `CLAUDE.section.md`
+  + docs); `docs/docusaurus`; `skills/knowledge-base`; `agents/code-reviewer`;
+  `claude/default` fallback. Verified end-to-end: single + react + node-nest +
+  docusaurus → composed CLAUDE.md, merged root `package.json` (react+nest deps),
+  runnable react files, and a self-contained `docs/` Docusaurus sub-project (root
+  package.json not polluted).
 
-### 9.3.1 Open Questions
+### 9.3.1 Open Questions / Follow-ups
 - Distribution: publish flow to npm (unscoped `create-ai-native-project`).
-- Should selecting a stack also install runnable scaffolding (package.json,
-  deps) or remain "AI-native assets only" (CLAUDE.md + `.claude/` + docs)?
-- Multi-stack ordering / de-duplication if two stacks ship the same setup file.
+- Full runnable boilerplate for `node-nest` / `react-native` (currently
+  package.json + deps; entry files come from their official CLIs — see stack docs).
+- Multi-stack conflicts: `type: module` vs CommonJS, or two stacks shipping the
+  same setup file (currently first-wins on new, skip-existing when adding).
 
 ### 9.4 Layout
 ```
@@ -223,8 +236,10 @@ src/
     create.ts         # interactive flow: new-folder / existing / --boot
     update.ts         # refresh the registry cache
   lib/
-    templates.ts      # git registry: clone/pull + list/fetch + read template files
+    templates.ts      # git registry: clone/pull + list/fetch + read; kind-aware compose exclusion
     claudemd.ts       # compose CLAUDE.md (project-type base + stack sections)
+    pkgjson.ts        # compose package.json (project-type base + stack fragments, first-wins)
+    install.ts        # detect pnpm/npm + run install
     files.ts          # write files to disk (skip existing unless overwrite)
     project.ts        # detect existing-vs-new project
 tsup.config.ts        # build config (ESM + shebang)
@@ -244,3 +259,4 @@ tsconfig.json         # strict TS, Bundler resolution
 - 2026-07-10 — Seeded the `geekyants/claude-registry` registry (`main`): `claude/default`, `skills/knowledge-base`, `agents/code-reviewer`. Verified the CLI end-to-end against the live registry (files land at correct target paths). Typecheck + build pass.
 - 2026-07-10 — Moved the CLI to its own repo `geekyants/create-ai-native-project` (`origin`; old `base-claude-setup` kept as `legacy` remote). Renamed registry `claude-setup` → `claude-registry` and updated all references; cache dir → `~/.cache/create-ai-native-project/registry`. Re-verified end-to-end against the renamed registry.
 - 2026-07-10 — Added **project-type** + **tech-stack** selection (registry-driven) and **CLAUDE.md composition** (project-type base + stack sections). New `lib/claudemd.ts`; `templates.ts` gained kinds `project-type`/`stack`, `readTemplateFile`, and compose-file exclusion. Seeded registry with `single`/`monorepo` project-types and `react`/`node-nest`/`react-native` stacks. Verified end-to-end (composition + setup-file copy). Typecheck + build pass.
+- 2026-07-10 — Added **runnable scaffolding** (composed `package.json`, first-wins merge; new `lib/pkgjson.ts`) + **optional dependency install** (`lib/install.ts`), and a **docs folder option** (new registry `docs/` kind + `docs/docusaurus`; kind-aware compose exclusion so the docs sub-project keeps its own package.json). Seeded registry: package.json fragments for all project-types/stacks, runnable React files, and the Docusaurus template. Verified end-to-end (merged root pkg, unpolluted docs sub-project). Committed via branch → MR → merged to `main`.
