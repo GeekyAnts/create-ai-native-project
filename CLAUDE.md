@@ -208,6 +208,7 @@ Claude) stay aware of what's set up and skip inapplicable actions.
 | 2026-07-10 | **Runnable boilerplate:** NestJS/FastAPI/Streamlit complete; Laravel/Flutter are starters (full skeleton via their official CLIs) | Honest about hand-written vs generated scaffolding |
 | 2026-07-10 | **`.ai-native-project.json` manifest** written into every project (state: type/stacks/…/agents); `project type` immutable; existing runs merge (union) | Tool + Claude stay aware of state; avoid inapplicable/duplicate actions |
 | 2026-07-10 | **Per-stack agents auto-install:** each stack bundles `.claude/agents/<stack>.md`, copied with the stack | Selecting a stack installs its specialist agent, no extra prompt |
+| 2026-07-10 | **Core set (`core.json`):** `engineering-standards` skill + `code-reviewer` + `security-reviewer` agents install on every project (hidden from pickers); registry-editable | Foundational quality/security guardrails always present, no CLI release to change |
 
 ### 9.3 Registry (template source)
 The CLI reads skills, agents, and the CLAUDE.md template from a **git repo**,
@@ -271,6 +272,7 @@ src/
     pkgjson.ts        # compose package.json (project-type base + stack fragments, first-wins)
     compose.ts        # compose docker-compose.yml (base + compose.service.yml fragments)
     manifest.ts       # read/merge/write .ai-native-project.json (project state)
+                      # (templates.ts readCore() reads registry core.json)
     install.ts        # detect pnpm/npm + run install
     files.ts          # write files to disk (skip existing unless overwrite)
     project.ts        # detect existing-vs-new project
@@ -297,3 +299,4 @@ tsconfig.json         # strict TS, Bundler resolution
 - 2026-07-10 — Added **`.ai-native-project.json` manifest** (new `lib/manifest.ts`): written into every project with its state; on existing-project runs the CLI reads it, reuses the immutable project type (skips that prompt), and merges (unions) selections. Added **per-stack agents** bundled in each stack (`.claude/agents/<stack>.md`) that auto-install with the stack; installed agents/skills are derived from written paths and recorded in the manifest. Base CLAUDE.md templates now point to the manifest. Verified end-to-end (agents auto-install; manifest merge preserves createdAt + immutable type + unions arrays). Committed via branch `feat/manifest-and-stack-agents` → MR → merged to `main`.
 - 2026-07-10 — Added **default development-workflow conventions** to the base CLAUDE.md templates (single/monorepo/default) in the registry: branch-first for any feature/change (never commit directly to `main`), bump the version (semver) after each commit/push, atomic commits, merge via PR/MR. Registry-only change (`geekyants/claude-registry` @ main); verified the instructions appear in a composed CLAUDE.md.
 - 2026-07-10 — Added **engineering standards** (registry-only), layered by cost/frequency: (1) base CLAUDE.md templates gained a non-negotiable standards block (no secrets, validate-before-done, test behavior changes, untrusted input, smallest-change, decision-priority); (2) new **`engineering-standards` skill** = the full 28-section senior-engineer playbook (on-demand); (3) new **`security-reviewer` agent** for diff security review (complements `code-reviewer`). Model: CLAUDE.md = always-on guardrails; skill = auto-triggers on dev tasks; agents = independent review at the pre-PR checkpoint. Verified end-to-end (skill/agent listed + install to correct paths; standing instructions in composed CLAUDE.md).
+- 2026-07-10 — Made those a **core set** (new `core.json` + `templates.ts` `readCore()`): `engineering-standards`, `code-reviewer`, `security-reviewer` install on every project regardless of selection and are hidden from the pickers; core is registry-editable. Verified: with zero skill/agent selections all three still install; core ids excluded from picker options. Registry `core.json` pushed to `main`.
