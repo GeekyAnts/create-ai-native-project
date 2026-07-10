@@ -162,10 +162,11 @@ Beyond CLAUDE.md + `.claude/`, it composes a runnable **package.json** (project
 type base + stack deps/scripts), an optional **docker-compose.yml** (services
 from the chosen stacks/databases/storage, `build: .` against per-stack
 Dockerfiles), CI config, auth setup, and a **docs/** site (Docusaurus). Stacks
-include React, React Native, Flutter, NestJS, Laravel, Python FastAPI, and
+include React, Next.js, React Native, Flutter, NestJS, Laravel, Python FastAPI, and
 Python Streamlit (each with runnable boilerplate + a Dockerfile); databases
 (Postgres/MySQL/MongoDB), storage (MinIO/AWS S3), and auth (JWT/Clerk) contribute
-CLAUDE.md sections; CI (GitHub Actions / GitLab CI) drops a pipeline file. Each
+CLAUDE.md sections; CI (GitHub Actions / GitLab CI) is **composed per selected
+stack** (one job per stack). Each
 stack also **auto-installs a specialist agent** (`.claude/agents/<stack>.md`), and
 every project records its state in **`.ai-native-project.json`** so re-runs (and
 Claude) stay aware of what's set up and skip inapplicable actions.
@@ -209,6 +210,7 @@ Claude) stay aware of what's set up and skip inapplicable actions.
 | 2026-07-10 | **`.ai-native-project.json` manifest** written into every project (state: type/stacks/…/agents); `project type` immutable; existing runs merge (union) | Tool + Claude stay aware of state; avoid inapplicable/duplicate actions |
 | 2026-07-10 | **Per-stack agents auto-install:** each stack bundles `.claude/agents/<stack>.md`, copied with the stack | Selecting a stack installs its specialist agent, no extra prompt |
 | 2026-07-10 | **Core set (`core.json`):** `engineering-standards` skill + `code-reviewer` + `security-reviewer` agents install on every project (hidden from pickers); registry-editable | Foundational quality/security guardrails always present, no CLI release to change |
+| 2026-07-10 | **Per-stack CI:** CI providers declare `compose: {base, fragment}`; the pipeline is base skeleton + each selected stack's `ci.<provider>.yml` job (new `lib/ci.ts`) | CI reflects the actual stacks, not a generic pipeline |
 
 ### 9.3 Registry (template source)
 The CLI reads skills, agents, and the CLAUDE.md template from a **git repo**,
@@ -226,7 +228,7 @@ shallow-cloned/updated into a local cache (`~/.cache/create-ai-native-project/re
   storage/<id>/        → CLAUDE.section.md + compose.service.yml (minio/aws-s3)
   auth/<id>/           → CLAUDE.section.md + setup files (jwt/clerk)
   docker/<id>/         → docker-compose.yml base (composed) + verbatim extras (.dockerignore)
-  ci/<id>/             → pipeline file copied verbatim (github-actions → .github/workflows/ci.yml; gitlab-ci → .gitlab-ci.yml)
+  ci/<id>/             → base skeleton + per-stack job fragments composed (github-actions → .github/workflows/ci.yml; gitlab-ci → .gitlab-ci.yml)
   docs/<id>/           → copied to project docs/ (self-contained sub-project, e.g. Docusaurus)
   skills/<id>/         → copied to .claude/skills/<id>/
   agents/<id>/         → copied to .claude/agents/
@@ -239,10 +241,10 @@ shallow-cloned/updated into a local cache (`~/.cache/create-ai-native-project/re
   and `requirements.txt` / Dockerfiles / CI files drop in as setup files.
 - **Status:** ✅ seeded (branch `main`):
   - project-types: `single`, `monorepo` (monorepo has a `package.json` base)
-  - stacks (each with runnable boilerplate + Dockerfile): `react` (fully runnable),
-    `node-nest`, `python-fastapi`, `python-streamlit` complete; `laravel`, `flutter`,
-    `react-native` are starters (full skeleton via their official CLIs). Each stack
-    bundles a specialist agent at `.claude/agents/<stack>.md`.
+  - stacks (each: runnable boilerplate + Dockerfile + bundled `.claude/agents/<stack>.md`
+    + per-provider CI job fragments): `react`, `nextjs`, `node-nest`, `python-fastapi`,
+    `python-streamlit` complete; `laravel`, `flutter`, `react-native` are starters
+    (full skeleton via their official CLIs).
   - databases: `postgres`, `mysql`, `mongodb` · storage: `minio`, `aws-s3`
   - auth: `jwt`, `clerk` · ci: `github-actions`, `gitlab-ci`
   - docker: `compose` base · docs: `docusaurus`
@@ -271,6 +273,7 @@ src/
     claudemd.ts       # compose CLAUDE.md (base + section refs: stack/database/storage)
     pkgjson.ts        # compose package.json (project-type base + stack fragments, first-wins)
     compose.ts        # compose docker-compose.yml (base + compose.service.yml fragments)
+    ci.ts             # compose CI pipeline (provider base + per-stack ci.<provider>.yml)
     manifest.ts       # read/merge/write .ai-native-project.json (project state)
                       # (templates.ts readCore() reads registry core.json)
     install.ts        # detect pnpm/npm + run install
@@ -301,3 +304,4 @@ tsconfig.json         # strict TS, Bundler resolution
 - 2026-07-10 — Added **engineering standards** (registry-only), layered by cost/frequency: (1) base CLAUDE.md templates gained a non-negotiable standards block (no secrets, validate-before-done, test behavior changes, untrusted input, smallest-change, decision-priority); (2) new **`engineering-standards` skill** = the full 28-section senior-engineer playbook (on-demand); (3) new **`security-reviewer` agent** for diff security review (complements `code-reviewer`). Model: CLAUDE.md = always-on guardrails; skill = auto-triggers on dev tasks; agents = independent review at the pre-PR checkpoint. Verified end-to-end (skill/agent listed + install to correct paths; standing instructions in composed CLAUDE.md).
 - 2026-07-10 — Made those a **core set** (new `core.json` + `templates.ts` `readCore()`): `engineering-standards`, `code-reviewer`, `security-reviewer` install on every project regardless of selection and are hidden from the pickers; core is registry-editable. Verified: with zero skill/agent selections all three still install; core ids excluded from picker options. Registry `core.json` pushed to `main`.
 - 2026-07-10 — Added **`knowledge-base`** to the core set (registry `core.json` edit; no CLI change). Core is now skills `engineering-standards` + `knowledge-base`, agents `code-reviewer` + `security-reviewer`. Verified all four install with zero selections; since both skills are core the skills picker is empty (auto-skipped).
+- 2026-07-10 — Added the **Next.js** stack (Next 15 App Router: boilerplate, Dockerfile, agent, package.json, compose service, CLAUDE section, CI fragments) and reworked CI to be **per-stack composed** (new `lib/ci.ts`; provider `template.json` `compose` config; each stack ships `ci.github.yml` / `ci.gitlab.yml` job fragments). Verified end-to-end (nextjs+python-fastapi+node-nest → valid GitHub + GitLab pipelines with a job per stack; Next.js installs boilerplate + agent). Committed via branch `feat/nextjs-and-per-stack-ci` → MR → merged to `main`.

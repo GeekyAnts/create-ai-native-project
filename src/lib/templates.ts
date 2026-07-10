@@ -75,11 +75,16 @@ const FRAGMENT_KINDS: TemplateKind[] = [
  * Everything else is copied verbatim — e.g. a `docs/` sub-project keeps its own
  * package.json, and `requirements.txt` / config files are dropped as setup.
  */
+const FRAGMENT_FILES = new Set([
+  "CLAUDE.section.md",
+  "compose.service.yml",
+  "ci.github.yml",
+  "ci.gitlab.yml",
+]);
+
 function isComposeFile(kind: TemplateKind, rel: string): boolean {
   if (rel === "template.json") return true;
-  if (FRAGMENT_KINDS.includes(kind)) {
-    if (rel === "CLAUDE.section.md" || rel === "compose.service.yml") return true;
-  }
+  if (FRAGMENT_KINDS.includes(kind) && FRAGMENT_FILES.has(rel)) return true;
   if (kind === "project-type" || kind === "stack") {
     if (rel === "CLAUDE.md" || rel === "package.json") return true;
   }
