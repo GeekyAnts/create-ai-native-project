@@ -26,7 +26,13 @@ import { composeCi } from "../lib/ci.js";
 import { writeTemplateFiles, type WriteResult } from "../lib/files.js";
 import { isExistingProject } from "../lib/project.js";
 import { detectPackageManager, runInstall } from "../lib/install.js";
-import { MANIFEST_FILE, readManifest, writeManifest } from "../lib/manifest.js";
+import {
+  MANIFEST_FILE,
+  readManifest,
+  writeManifest,
+  type AppEntry,
+} from "../lib/manifest.js";
+import { scaffoldMonorepo } from "../lib/monorepo.js";
 
 const VERSION = "0.1.0";
 
@@ -165,6 +171,22 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     });
     if (p.isCancel(res)) return p.cancel("Cancelled.");
     projectType = res as string;
+  }
+
+  // Monorepo has a different shape: apps under apps/<group>/<name>/ + shared packages.
+  if (projectType === "monorepo") {
+    return runMonorepoFlow({
+      targetDir,
+      mode,
+      stacks,
+      databases,
+      storage,
+      authOptions,
+      docsOptions,
+      skillOptions,
+      agentOptions,
+      core,
+    });
   }
 
   // 4. Tech stack(s), database(s), storage — each may add a CLAUDE.md section,
@@ -335,6 +357,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     {
       projectType,
       stacks: selectedStacks,
+      apps: [],
       databases: selectedDatabases,
       storage: selectedStorage,
       auth: selectedAuth,
@@ -364,6 +387,177 @@ function namesUnder(paths: string[], sub: string, stripExt = ""): string[] {
     if (m) out.add(stripExt ? m[1].replace(new RegExp(`\\${stripExt}$`), "") : m[1]);
   }
   return [...out];
+}
+
+interface MonorepoContext {
+  targetDir: string;
+  mode: "new" | "existing";
+  stacks: Option[];
+  databases: Option[];
+  storage: Option[];
+  authOptions: Option[];
+  docsOptions: Option[];
+  skillOptions: Option[];
+  agentOptions: Option[];
+  core: CoreSet;
+}
+
+const DEFAULT_GROUPS = ["frontend", "backend", "mobile"];
+
+async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
+  const { targetDir, mode } = ctx;
+
+  if (ctx.stacks.length === 0) {
+    p.cancel("Registry has no stacks — cannot define apps.");
+    return;
+  }
+
+  // Define apps: each is a stack under apps/<group>/<name>/.
+  const apps: AppEntry[] = [];
+  let addAnother = true;
+  while (addAnother) {
+    const groupChoice = await p.select({
+      message: apps.length === 0 ? "Add an app — which group?" : "Next app — which group?",
+      options: [
+        ...DEFAULT_GROUPS.map((g) => ({ value: g, label: g })),
+        { value: "__custom__", label: "Custom…" },
+      ],
+    });
+    if (p.isCancel(groupChoice)) return p.cancel("Cancelled.");
+    let group = groupChoice as string;
+    if (group === "__custom__") {
+      const custom = await p.text({ message: "Custom group name?", placeholder: "services" });
+      if (p.isCancel(custom)) return p.cancel("Cancelled.");
+      group = slugSegment(custom);
+    }
+
+    const nameInput = await p.text({
+      message: `App name (under apps/${group}/)?`,
+      placeholder: "website",
+      validate: (v) => (v.trim().length === 0 ? "Name is required" : undefined),
+    });
+    if (p.isCancel(nameInput)) return p.cancel("Cancelled.");
+    const name = slugSegment(nameInput);
+
+    const stack = await p.select({
+      message: `Stack for apps/${group}/${name}?`,
+      options: ctx.stacks,
+    });
+    if (p.isCancel(stack)) return p.cancel("Cancelled.");
+
+    apps.push({ group, name, stack: stack as string });
+
+    const again = await p.confirm({ message: "Add another app?", initialValue: false });
+    if (p.isCancel(again)) return p.cancel("Cancelled.");
+    addAnother = again;
+  }
+
+  // Workspace-level selections.
+  const selectedDatabases = await pickMany("database(s)", ctx.databases, false);
+  if (selectedDatabases === null) return p.cancel("Cancelled.");
+  const selectedStorage = await pickMany("storage option(s)", ctx.storage, false);
+  if (selectedStorage === null) return p.cancel("Cancelled.");
+  const selectedAuth = await pickMany("auth option(s)", ctx.authOptions, false);
+  if (selectedAuth === null) return p.cancel("Cancelled.");
+  const selectedSkills = await pickMany("skills", ctx.skillOptions, false);
+  if (selectedSkills === null) return p.cancel("Cancelled.");
+  const selectedAgents = await pickMany("agents", ctx.agentOptions, false);
+  if (selectedAgents === null) return p.cancel("Cancelled.");
+
+  let selectedDocs: string[] = [];
+  if (ctx.docsOptions.length > 0) {
+    const label = ctx.docsOptions.length === 1 ? ` with ${ctx.docsOptions[0].label}` : "";
+    const wantDocs = await p.confirm({ message: `Set up a docs folder${label}?`, initialValue: false });
+    if (p.isCancel(wantDocs)) return p.cancel("Cancelled.");
+    if (wantDocs) {
+      if (ctx.docsOptions.length === 1) selectedDocs = [ctx.docsOptions[0].value];
+      else {
+        const picked = await pickMany("docs setup", ctx.docsOptions, true);
+        if (picked === null) return p.cancel("Cancelled.");
+        selectedDocs = picked;
+      }
+    }
+  }
+
+  const includeClaudeMd = await p.confirm({
+    message: "Generate CLAUDE.md (composed from the workspace + apps)?",
+    initialValue: true,
+  });
+  if (p.isCancel(includeClaudeMd)) return p.cancel("Cancelled.");
+
+  const sectionRefs: TemplateRef[] = [
+    ...selectedDatabases.map((id) => ({ kind: "database" as const, id })),
+    ...selectedStorage.map((id) => ({ kind: "storage" as const, id })),
+    ...selectedAuth.map((id) => ({ kind: "auth" as const, id })),
+  ];
+  const skills = unionStr(ctx.core.skills, selectedSkills);
+  const agents = unionStr(ctx.core.agents, selectedAgents);
+  const overwrite = mode === "new";
+
+  const build = p.spinner();
+  build.start("Scaffolding monorepo…");
+  let result;
+  try {
+    result = await scaffoldMonorepo(
+      targetDir,
+      {
+        projectName: basename(targetDir),
+        apps,
+        sectionRefs,
+        auth: selectedAuth,
+        docs: selectedDocs,
+        skills,
+        agents,
+        includeClaudeMd,
+      },
+      overwrite,
+    );
+    build.stop(`Wrote ${result.written.length} file(s) across ${apps.length} app(s).`);
+  } catch (err) {
+    build.stop(pc.red("Scaffolding failed."));
+    p.log.error(String(err instanceof Error ? err.message : err));
+    return;
+  }
+
+  if (result.skipped.length > 0) {
+    p.log.warn(
+      `Skipped ${result.skipped.length} existing file(s):\n` +
+        result.skipped.map((f) => `  ${pc.dim(f)}`).join("\n"),
+    );
+  }
+
+  await writeManifest(
+    targetDir,
+    {
+      projectType: "monorepo",
+      stacks: [...new Set(apps.map((a) => a.stack))],
+      apps,
+      databases: selectedDatabases,
+      storage: selectedStorage,
+      auth: selectedAuth,
+      ci: [],
+      docker: false,
+      docs: selectedDocs,
+      skills: unionStr(selectedSkills, namesUnder(result.written, "skills")),
+      agents: unionStr(selectedAgents, namesUnder(result.written, "agents", ".md")),
+    },
+    VERSION,
+    new Date().toISOString(),
+  );
+  p.log.info(`Recorded project state in ${MANIFEST_FILE}`);
+
+  p.outro(pc.green(`Done! monorepo ready at ${targetDir} (${apps.length} app(s))`));
+}
+
+/** A safe single path segment (lowercase, dashes). */
+function slugSegment(v: string): string {
+  return (
+    v
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-_]+/g, "-")
+      .replace(/^[-_]+|[-_]+$/g, "") || "app"
+  );
 }
 
 async function pickMany(
