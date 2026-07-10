@@ -36,7 +36,9 @@ export type TemplateKind =
   | "stack"
   | "database"
   | "storage"
+  | "auth"
   | "docker"
+  | "ci"
   | "docs"
   | "skill"
   | "agent"
@@ -54,6 +56,7 @@ const FRAGMENT_KINDS: TemplateKind[] = [
   "stack",
   "database",
   "storage",
+  "auth",
 ];
 
 /**
@@ -104,7 +107,9 @@ const KIND_DIR: Record<TemplateKind, string> = {
   stack: "stacks",
   database: "databases",
   storage: "storage",
+  auth: "auth",
   docker: "docker",
+  ci: "ci",
   docs: "docs",
   skill: "skills",
   agent: "agents",
@@ -117,7 +122,9 @@ const TARGET_ROOT: Record<TemplateKind, (id: string) => string> = {
   stack: () => "",
   database: () => "",
   storage: () => "",
+  auth: () => "",
   docker: () => "",
+  ci: () => "",
   docs: () => "docs",
   skill: (id) => join(".claude", "skills", id),
   agent: () => join(".claude", "agents"),
@@ -223,6 +230,8 @@ export const listProjectTypes = () => listTemplates("project-type");
 export const listStacks = () => listTemplates("stack");
 export const listDatabases = () => listTemplates("database");
 export const listStorage = () => listTemplates("storage");
+export const listAuth = () => listTemplates("auth");
+export const listCi = () => listTemplates("ci");
 export const listDocs = () => listTemplates("docs");
 export const listSkills = () => listTemplates("skill");
 export const listAgents = () => listTemplates("agent");
