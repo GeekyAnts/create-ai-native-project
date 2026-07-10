@@ -1,0 +1,14 @@
+stages:
+  - verify
+
+verify:
+  stage: verify
+  image: node:22
+  script:
+    - npm ci
+    - npm run typecheck
+    - npm run build
+    - npm test
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'

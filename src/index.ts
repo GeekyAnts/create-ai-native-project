@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { createCommand } from "./commands/create.js";
 import { updateCommand } from "./commands/update.js";
+import { VERSION } from "./lib/version.js";
 
 // Load .env (registry config) from the current working directory if present.
 try {
@@ -16,7 +17,7 @@ program
   .description(
     "Interactive CLI to scaffold AI-native projects with CLAUDE.md, skills, and agents",
   )
-  .version("0.1.0")
+  .version(VERSION)
   .option("--boot <project-name>", "create a new folder and scaffold into it")
   .action((opts: { boot?: string }) => createCommand(opts));
 

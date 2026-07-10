@@ -6,6 +6,23 @@ export interface ComposedFile {
   contents: string;
 }
 
+/** Read a CI provider's compose config ({base, fragment}) from its template.json. */
+export async function readCiComposeConfig(
+  providerId: string,
+): Promise<{ base: string; fragment: string } | null> {
+  const manifestRaw = await readTemplateFile("ci", providerId, "template.json");
+  if (!manifestRaw) return null;
+  try {
+    const compose = JSON.parse(manifestRaw).compose;
+    if (compose?.base && compose?.fragment) {
+      return { base: compose.base, fragment: compose.fragment };
+    }
+  } catch {
+    // malformed manifest — treat as no compose config
+  }
+  return null;
+}
+
 /**
  * Compose a per-stack CI pipeline (text composition, like docker-compose):
  * the CI provider template's `template.json` declares `compose: { base, fragment }`,
@@ -19,16 +36,8 @@ export async function composeCi(
   providerId: string,
   refs: TemplateRef[],
 ): Promise<ComposedFile | null> {
-  const manifestRaw = await readTemplateFile("ci", providerId, "template.json");
-  let compose: { base?: string; fragment?: string } | undefined;
-  if (manifestRaw) {
-    try {
-      compose = JSON.parse(manifestRaw).compose;
-    } catch {
-      compose = undefined;
-    }
-  }
-  if (!compose?.base || !compose.fragment) return null;
+  const compose = await readCiComposeConfig(providerId);
+  if (!compose) return null;
 
   const base = await readTemplateFile("ci", providerId, compose.base);
   if (base === null) return null;

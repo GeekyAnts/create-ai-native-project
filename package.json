@@ -1,6 +1,6 @@
 {
   "name": "create-ai-native-project",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Interactive CLI to scaffold AI-native projects with CLAUDE.md, skills, and agents",
   "type": "module",
   "bin": {
@@ -10,13 +10,15 @@
     "dist"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=20.12"
   },
   "scripts": {
     "build": "tsup",
     "dev": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
-    "start": "node dist/index.js"
+    "test": "vitest run",
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "keywords": [
     "claude",
@@ -28,15 +30,21 @@
   ],
   "author": "GeekyAnts",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://git.geekyants.com/geekyants/create-ai-native-project.git"
+  },
+  "homepage": "https://git.geekyants.com/geekyants/create-ai-native-project",
   "dependencies": {
     "@clack/prompts": "^0.7.0",
     "commander": "^12.1.0",
     "picocolors": "^1.1.0"
   },
   "devDependencies": {
+    "@types/node": "^22.7.0",
     "tsup": "^8.3.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
-    "@types/node": "^22.7.0"
+    "vitest": "^4.1.10"
   }
 }

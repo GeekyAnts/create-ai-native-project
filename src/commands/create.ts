@@ -14,15 +14,21 @@ import {
   listStorage,
   listTemplates,
   readCore,
+  readTemplateFile,
   fetchTemplate,
   type CoreSet,
   type TemplateMeta,
   type TemplateRef,
 } from "../lib/templates.js";
 import { composeClaudeMd } from "../lib/claudemd.js";
-import { composePackageJson } from "../lib/pkgjson.js";
+import {
+  composePackageJson,
+  mergeFirstWins,
+  readPkgFragment,
+  type Json,
+} from "../lib/pkgjson.js";
 import { composeDockerCompose } from "../lib/compose.js";
-import { composeCi } from "../lib/ci.js";
+import { composeCi, readCiComposeConfig } from "../lib/ci.js";
 import { writeTemplateFiles, type WriteResult } from "../lib/files.js";
 import { isExistingProject } from "../lib/project.js";
 import { detectPackageManager, runInstall } from "../lib/install.js";
@@ -31,10 +37,25 @@ import {
   readManifest,
   writeManifest,
   type AppEntry,
+  type ProjectManifest,
 } from "../lib/manifest.js";
-import { scaffoldMonorepo } from "../lib/monorepo.js";
-
-const VERSION = "0.1.0";
+import {
+  buildAppJobBlock,
+  buildAppServiceBlock,
+  composeMonorepoCi,
+  composeMonorepoClaudeMd,
+  composeMonorepoDockerCompose,
+  scaffoldMonorepo,
+} from "../lib/monorepo.js";
+import {
+  appendBlocks,
+  readIfExists,
+  toBlock,
+  usedHostPorts,
+  type Block,
+} from "../lib/augment.js";
+import { slugSegment } from "../lib/names.js";
+import { VERSION } from "../lib/version.js";
 
 export interface CreateOptions {
   /** --boot <name>: create this folder and scaffold into it. */
@@ -71,7 +92,11 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
 
   if (opts.boot) {
     targetDir = resolve(opts.boot);
-    mode = "new";
+    // --boot into a folder that already has a project must not clobber it.
+    mode = (await isExistingProject(targetDir)) ? "existing" : "new";
+    if (mode === "existing") {
+      p.log.warn(`${pc.dim(targetDir)} already contains a project — adding to it (no overwrites).`);
+    }
     await mkdir(targetDir, { recursive: true });
   } else if (await isExistingProject(resolve("."))) {
     targetDir = resolve(".");
@@ -159,6 +184,22 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     p.log.warn(String(err instanceof Error ? err.message : err));
   }
 
+  // On an existing ai-native project, don't re-offer what's already installed.
+  // (Stacks stay offered for monorepos — several apps may share one stack.)
+  if (existingManifest) {
+    const has = (arr?: string[]) => (o: Option) => !(arr ?? []).includes(o.value);
+    if (existingManifest.projectType !== "monorepo") {
+      stacks = stacks.filter(has(existingManifest.stacks));
+    }
+    databases = databases.filter(has(existingManifest.databases));
+    storage = storage.filter(has(existingManifest.storage));
+    authOptions = authOptions.filter(has(existingManifest.auth));
+    ciOptions = ciOptions.filter(has(existingManifest.ci));
+    docsOptions = docsOptions.filter(has(existingManifest.docs));
+    skillOptions = skillOptions.filter(has(existingManifest.skills));
+    agentOptions = agentOptions.filter(has(existingManifest.agents));
+  }
+
   // 3. Project type (single choice) — drives the base CLAUDE.md + package.json.
   //    Fixed once set: reuse it from the manifest instead of asking again.
   let projectType: string | null = existingManifest?.projectType ?? null;
@@ -188,6 +229,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
       skillOptions,
       agentOptions,
       core,
+      existingManifest,
     });
   }
 
@@ -228,7 +270,18 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     }
   }
 
-  // 5c. Optional CI configuration (single provider).
+  // 5c. Optional CI configuration. On add runs, offer to extend the CI that's
+  //     already installed with jobs for the newly selected stacks.
+  const prevCi = existingManifest?.ci ?? [];
+  let appendCiProviders: string[] = [];
+  if (prevCi.length > 0 && selectedStacks.length > 0) {
+    const res = await p.confirm({
+      message: `Update existing CI (${prevCi.join(", ")}) with jobs for the new stack(s)?`,
+      initialValue: true,
+    });
+    if (p.isCancel(res)) return p.cancel("Cancelled.");
+    if (res) appendCiProviders = prevCi;
+  }
   let selectedCi: string[] = [];
   if (ciOptions.length > 0) {
     const wantCi = await p.confirm({
@@ -250,9 +303,21 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     }
   }
 
-  // 5d. Optional Docker (docker-compose composed from the selections above).
+  // 5d. Optional Docker. On add runs where Docker is already set up, offer to
+  //     extend docker-compose.yml with services for the new selections.
   let wantDocker = false;
-  if (dockerBaseId) {
+  if (existingManifest?.docker) {
+    const hasNew =
+      selectedStacks.length + selectedDatabases.length + selectedStorage.length > 0;
+    if (hasNew) {
+      const res = await p.confirm({
+        message: "Update docker-compose.yml with services for the new selections?",
+        initialValue: true,
+      });
+      if (p.isCancel(res)) return p.cancel("Cancelled.");
+      wantDocker = res;
+    }
+  } else if (dockerBaseId) {
     const res = await p.confirm({
       message: "Use Docker (generate a docker-compose.yml)?",
       initialValue: false,
@@ -275,26 +340,64 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     ...selectedAuth.map((id) => ({ kind: "auth" as const, id })),
   ];
 
-  // 6. Write. In an existing project we never overwrite user files.
+  // 6. Write. Setup files never overwrite user files; generator-composed files
+  //    (CLAUDE.md, package.json, docker-compose.yml, CI) are APPENDED/MERGED on
+  //    add runs so new selections actually land in them.
   const overwrite = mode === "new";
+  const isAdd = mode === "existing";
+  // Merged state = what the project already has + this run's selections; used
+  // when composing a file from scratch on an add run.
+  const mergedStacks = unionStr(existingManifest?.stacks ?? [], selectedStacks);
+  const mergedRefs: TemplateRef[] = [
+    ...mergedStacks.map((id) => ({ kind: "stack" as const, id })),
+    ...unionStr(existingManifest?.databases ?? [], selectedDatabases).map((id) => ({ kind: "database" as const, id })),
+    ...unionStr(existingManifest?.storage ?? [], selectedStorage).map((id) => ({ kind: "storage" as const, id })),
+    ...unionStr(existingManifest?.auth ?? [], selectedAuth).map((id) => ({ kind: "auth" as const, id })),
+  ];
   const build = p.spinner();
   build.start("Scaffolding…");
   const result: WriteResult = { written: [], skipped: [] };
   const pkgPath = resolve(targetDir, "package.json");
   try {
+    // CLAUDE.md: compose fresh, or append the new sections to an existing one.
     if (includeClaudeMd) {
-      const claudeMd = await composeClaudeMd(projectType, refs);
-      if (claudeMd) merge(result, await writeFile(targetDir, "CLAUDE.md", claudeMd, overwrite));
+      const existing = isAdd ? await readIfExists(resolve(targetDir, "CLAUDE.md")) : null;
+      if (existing === null) {
+        const claudeMd = await composeClaudeMd(projectType, isAdd ? mergedRefs : refs);
+        if (claudeMd) merge(result, await writeFile(targetDir, "CLAUDE.md", claudeMd, overwrite));
+      } else {
+        const blocks = await sectionBlocks(refs);
+        const { content, added } = appendBlocks(existing, blocks, "\n\n");
+        if (added.length > 0) merge(result, await writeFile(targetDir, "CLAUDE.md", content, true));
+      }
     }
-    // Runnable scaffolding: composed package.json (deps + scripts).
-    const pkgJson = await composePackageJson(basename(targetDir), projectType, selectedStacks);
-    if (pkgJson) merge(result, await writeFile(targetDir, "package.json", pkgJson, overwrite));
 
-    // Docker: compose docker-compose.yml from the selections + copy base extras.
+    // package.json: compose fresh, or merge new stack fragments in (existing wins).
+    const existingPkgRaw = isAdd ? await readIfExists(pkgPath) : null;
+    if (existingPkgRaw === null) {
+      const pkgJson = await composePackageJson(
+        basename(targetDir),
+        projectType,
+        isAdd ? mergedStacks : selectedStacks,
+      );
+      if (pkgJson) merge(result, await writeFile(targetDir, "package.json", pkgJson, overwrite));
+    } else {
+      const updated = await mergePkgFragments(existingPkgRaw, selectedStacks);
+      if (updated !== null) merge(result, await writeFile(targetDir, "package.json", updated, true));
+    }
+
+    // Docker: compose fresh, or append services for the new selections.
     if (wantDocker && dockerBaseId) {
-      const compose = await composeDockerCompose(dockerBaseId, refs);
-      if (compose) merge(result, await writeFile(targetDir, "docker-compose.yml", compose, overwrite));
-      merge(result, await copy("docker", dockerBaseId, targetDir, overwrite));
+      const existing = isAdd ? await readIfExists(resolve(targetDir, "docker-compose.yml")) : null;
+      if (existing === null) {
+        const compose = await composeDockerCompose(dockerBaseId, isAdd ? mergedRefs : refs);
+        if (compose) merge(result, await writeFile(targetDir, "docker-compose.yml", compose, overwrite));
+        merge(result, await copy("docker", dockerBaseId, targetDir, overwrite));
+      } else {
+        const blocks = await fragmentBlocks(refs, "compose.service.yml");
+        const { content, added } = appendBlocks(existing, blocks);
+        if (added.length > 0) merge(result, await writeFile(targetDir, "docker-compose.yml", content, true));
+      }
     }
 
     if (projectType) merge(result, await copy("project-type", projectType, targetDir, overwrite));
@@ -302,16 +405,31 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     for (const id of selectedDatabases) merge(result, await copy("database", id, targetDir, overwrite));
     for (const id of selectedStorage) merge(result, await copy("storage", id, targetDir, overwrite));
     for (const id of selectedAuth) merge(result, await copy("auth", id, targetDir, overwrite));
-    // CI: compose a per-stack pipeline from the provider base + each stack's job fragment.
-    const stackRefs: TemplateRef[] = selectedStacks.map((id) => ({ kind: "stack" as const, id }));
+
+    // CI: append new-stack jobs to already-installed providers; compose fresh
+    // (from the merged stack set) for newly selected providers.
+    const newStackRefs: TemplateRef[] = selectedStacks.map((id) => ({ kind: "stack" as const, id }));
+    for (const id of appendCiProviders) {
+      const cfg = await readCiComposeConfig(id);
+      if (!cfg) continue;
+      const existing = await readIfExists(resolve(targetDir, cfg.base));
+      if (existing === null) continue;
+      const blocks = await fragmentBlocks(newStackRefs, cfg.fragment);
+      const { content, added } = appendBlocks(existing, blocks);
+      if (added.length > 0) merge(result, await writeFile(targetDir, cfg.base, content, true));
+    }
     for (const id of selectedCi) {
-      const composed = await composeCi(id, stackRefs);
+      const composed = await composeCi(
+        id,
+        (isAdd ? mergedStacks : selectedStacks).map((s) => ({ kind: "stack" as const, id: s })),
+      );
       if (composed) {
         merge(result, await writeFile(targetDir, composed.path, composed.contents, overwrite));
       } else {
         merge(result, await copy("ci", id, targetDir, overwrite));
       }
     }
+
     for (const id of selectedDocs) merge(result, await copy("docs", id, targetDir, overwrite));
     const skillsToInstall = unionStr(core.skills, selectedSkills);
     const agentsToInstall = unionStr(core.agents, selectedAgents);
@@ -380,6 +498,62 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
 
 const unionStr = (a: string[], b: string[]): string[] => [...new Set([...a, ...b])];
 
+/** Blocks from the refs' CLAUDE.section.md fragments (for appending). */
+export async function sectionBlocks(refs: TemplateRef[]): Promise<Block[]> {
+  return fragmentBlocks(refs, "CLAUDE.section.md");
+}
+
+/**
+ * Blocks for monorepo app sections in CLAUDE.md. The header matches what
+ * composeMonorepoClaudeMd emits so appends stay idempotent.
+ */
+export async function appSectionBlocks(apps: AppEntry[]): Promise<Block[]> {
+  const blocks: Block[] = [];
+  for (const app of apps) {
+    const header = `### App: apps/${app.group}/${app.name} — ${app.stack}`;
+    const sec = await readTemplateFile("stack", app.stack, "CLAUDE.section.md");
+    const body =
+      sec && sec.trim().length > 0 ? `${header}\n\n${sec.trim()}` : header;
+    blocks.push({ header, body });
+  }
+  return blocks;
+}
+
+/** Blocks from a named fragment file across refs (for appending). */
+export async function fragmentBlocks(refs: TemplateRef[], file: string): Promise<Block[]> {
+  const blocks: Block[] = [];
+  for (const ref of refs) {
+    const frag = await readTemplateFile(ref.kind, ref.id, file);
+    if (frag && frag.trim().length > 0) blocks.push(toBlock(frag));
+  }
+  return blocks;
+}
+
+/**
+ * Merge the given stacks' package.json fragments into an existing package.json
+ * with EXISTING-WINS semantics. Returns the new serialized content, or null if
+ * nothing changed (or the existing file isn't valid JSON — left untouched).
+ */
+export async function mergePkgFragments(
+  existingRaw: string,
+  stackIds: string[],
+): Promise<string | null> {
+  let pkg: Json;
+  try {
+    pkg = JSON.parse(existingRaw);
+  } catch {
+    return null; // don't touch a file we can't safely parse
+  }
+  let merged = pkg;
+  for (const id of stackIds) {
+    const frag = await readPkgFragment("stack", id);
+    if (frag) merged = mergeFirstWins(merged, frag);
+  }
+  const next = JSON.stringify(merged, null, 2) + "\n";
+  const prev = JSON.stringify(pkg, null, 2) + "\n";
+  return next === prev ? null : next;
+}
+
 /** Extract the names installed under `.claude/<sub>/` from written paths. */
 function namesUnder(paths: string[], sub: string, stripExt = ""): string[] {
   const out = new Set<string>();
@@ -404,6 +578,7 @@ interface MonorepoContext {
   skillOptions: Option[];
   agentOptions: Option[];
   core: CoreSet;
+  existingManifest: ProjectManifest | null;
 }
 
 const DEFAULT_GROUPS = ["frontend", "backend", "mobile"];
@@ -415,6 +590,14 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
     p.cancel("Registry has no stacks — cannot define apps.");
     return;
   }
+
+  const existingApps = ctx.existingManifest?.apps ?? [];
+  if (existingApps.length > 0) {
+    p.log.info(
+      `Existing apps: ${existingApps.map((a) => `${a.group}/${a.name} (${a.stack})`).join(", ")}`,
+    );
+  }
+  const taken = new Set(existingApps.map((a) => `${a.group}/${a.name}`));
 
   // Define apps: each is a stack under apps/<group>/<name>/.
   const apps: AppEntry[] = [];
@@ -443,6 +626,11 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
     if (p.isCancel(nameInput)) return p.cancel("Cancelled.");
     const name = slugSegment(nameInput);
 
+    if (taken.has(`${group}/${name}`)) {
+      p.log.warn(`apps/${group}/${name} already exists — pick a different name.`);
+      continue;
+    }
+
     const stack = await p.select({
       message: `Stack for apps/${group}/${name}?`,
       options: ctx.stacks,
@@ -450,6 +638,7 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
     if (p.isCancel(stack)) return p.cancel("Cancelled.");
 
     apps.push({ group, name, stack: stack as string });
+    taken.add(`${group}/${name}`);
 
     const again = await p.confirm({ message: "Add another app?", initialValue: false });
     if (p.isCancel(again)) return p.cancel("Cancelled.");
@@ -483,7 +672,18 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
     }
   }
 
-  // CI (per-app jobs) — single provider.
+  // CI (per-app jobs). On add runs, offer to extend the installed provider(s)
+  // with jobs for the new apps.
+  const prevCi = ctx.existingManifest?.ci ?? [];
+  let appendCiProviders: string[] = [];
+  if (prevCi.length > 0 && apps.length > 0) {
+    const res = await p.confirm({
+      message: `Update existing CI (${prevCi.join(", ")}) with jobs for the new app(s)?`,
+      initialValue: true,
+    });
+    if (p.isCancel(res)) return p.cancel("Cancelled.");
+    if (res) appendCiProviders = prevCi;
+  }
   let selectedCi: string[] = [];
   if (ctx.ciOptions.length > 0) {
     const wantCi = await p.confirm({ message: "Add CI configuration (a job per app)?", initialValue: false });
@@ -498,9 +698,20 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
     }
   }
 
-  // Docker (per-app services + shared db/storage).
+  // Docker (per-app services + shared db/storage). On add runs where Docker is
+  // already set up, offer to extend docker-compose.yml.
   let wantDocker = false;
-  if (ctx.dockerBaseId) {
+  if (ctx.existingManifest?.docker) {
+    const hasNew = apps.length + selectedDatabases.length + selectedStorage.length > 0;
+    if (hasNew) {
+      const res = await p.confirm({
+        message: "Update docker-compose.yml with services for the new apps/selections?",
+        initialValue: true,
+      });
+      if (p.isCancel(res)) return p.cancel("Cancelled.");
+      wantDocker = res;
+    }
+  } else if (ctx.dockerBaseId) {
     const res = await p.confirm({ message: "Use Docker (a service per app + databases/storage)?", initialValue: false });
     if (p.isCancel(res)) return p.cancel("Cancelled.");
     wantDocker = res;
@@ -520,11 +731,21 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
   const skills = unionStr(ctx.core.skills, selectedSkills);
   const agents = unionStr(ctx.core.agents, selectedAgents);
   const overwrite = mode === "new";
+  const isAdd = mode === "existing";
+  // Merged state, for composing files from scratch on add runs.
+  const mergedApps = [...existingApps, ...apps];
+  const mergedRefs: TemplateRef[] = [
+    ...unionStr(ctx.existingManifest?.databases ?? [], selectedDatabases).map((id) => ({ kind: "database" as const, id })),
+    ...unionStr(ctx.existingManifest?.storage ?? [], selectedStorage).map((id) => ({ kind: "storage" as const, id })),
+    ...unionStr(ctx.existingManifest?.auth ?? [], selectedAuth).map((id) => ({ kind: "auth" as const, id })),
+  ];
 
   const build = p.spinner();
   build.start("Scaffolding monorepo…");
-  let result;
+  let result: WriteResult;
   try {
+    // Fresh scaffolding handles composed files itself only on new projects; on
+    // add runs we scaffold the new apps' code, then append to composed files.
     result = await scaffoldMonorepo(
       targetDir,
       {
@@ -535,13 +756,71 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
         docs: selectedDocs,
         skills,
         agents,
-        includeClaudeMd,
-        ci: selectedCi,
-        docker: wantDocker,
+        includeClaudeMd: isAdd ? false : includeClaudeMd,
+        ci: isAdd ? [] : selectedCi,
+        docker: isAdd ? false : wantDocker,
         dockerBaseId: ctx.dockerBaseId,
       },
       overwrite,
     );
+
+    if (isAdd) {
+      // CLAUDE.md: append app sections + new workspace sections.
+      if (includeClaudeMd) {
+        const existing = await readIfExists(resolve(targetDir, "CLAUDE.md"));
+        if (existing === null) {
+          const md = await composeMonorepoClaudeMd(mergedApps, mergedRefs);
+          if (md) merge(result, await writeFile(targetDir, "CLAUDE.md", md, true));
+        } else {
+          const blocks = [...(await appSectionBlocks(apps)), ...(await sectionBlocks(sectionRefs))];
+          const { content, added } = appendBlocks(existing, blocks, "\n\n");
+          if (added.length > 0) merge(result, await writeFile(targetDir, "CLAUDE.md", content, true));
+        }
+      }
+
+      // docker-compose.yml: append services for the new apps + new db/storage.
+      if (wantDocker && ctx.dockerBaseId) {
+        const existing = await readIfExists(resolve(targetDir, "docker-compose.yml"));
+        if (existing === null) {
+          const compose = await composeMonorepoDockerCompose(ctx.dockerBaseId, mergedApps, mergedRefs);
+          if (compose) merge(result, await writeFile(targetDir, compose.path, compose.contents, true));
+          merge(result, await copy("docker", ctx.dockerBaseId, targetDir, false));
+        } else {
+          const ports = usedHostPorts(existing);
+          const blocks: Block[] = [];
+          for (const app of apps) {
+            const block = await buildAppServiceBlock(app, ports);
+            if (block) blocks.push(toBlock(block));
+          }
+          blocks.push(...(await fragmentBlocks(sectionRefs, "compose.service.yml")));
+          const { content, added } = appendBlocks(existing, blocks);
+          if (added.length > 0) merge(result, await writeFile(targetDir, "docker-compose.yml", content, true));
+        }
+      }
+
+      // CI: append per-app jobs to installed providers; compose fresh for new ones.
+      for (const providerId of appendCiProviders) {
+        const cfg = await readCiComposeConfig(providerId);
+        if (!cfg) continue;
+        const existing = await readIfExists(resolve(targetDir, cfg.base));
+        if (existing === null) {
+          const composed = await composeMonorepoCi(providerId, mergedApps);
+          if (composed) merge(result, await writeFile(targetDir, composed.path, composed.contents, true));
+          continue;
+        }
+        const blocks: Block[] = [];
+        for (const app of apps) {
+          const block = await buildAppJobBlock(app, cfg.fragment);
+          if (block) blocks.push(toBlock(block));
+        }
+        const { content, added } = appendBlocks(existing, blocks);
+        if (added.length > 0) merge(result, await writeFile(targetDir, cfg.base, content, true));
+      }
+      for (const providerId of selectedCi) {
+        const composed = await composeMonorepoCi(providerId, mergedApps);
+        if (composed) merge(result, await writeFile(targetDir, composed.path, composed.contents, false));
+      }
+    }
     build.stop(`Wrote ${result.written.length} file(s) across ${apps.length} app(s).`);
   } catch (err) {
     build.stop(pc.red("Scaffolding failed."));
@@ -577,17 +856,6 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
   p.log.info(`Recorded project state in ${MANIFEST_FILE}`);
 
   p.outro(pc.green(`Done! monorepo ready at ${targetDir} (${apps.length} app(s))`));
-}
-
-/** A safe single path segment (lowercase, dashes). */
-function slugSegment(v: string): string {
-  return (
-    v
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9-_]+/g, "-")
-      .replace(/^[-_]+|[-_]+$/g, "") || "app"
-  );
 }
 
 async function pickMany(
