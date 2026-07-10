@@ -1,6 +1,6 @@
 import { readTemplateFile } from "./templates.js";
 
-type Json = Record<string, unknown>;
+export type Json = Record<string, unknown>;
 
 /** package.json fields that are objects and should be key-merged (not replaced). */
 const MERGE_FIELDS = [
@@ -20,7 +20,7 @@ const isObject = (v: unknown): v is Json =>
  * in `base` is never overwritten (applies to top-level fields and to individual
  * entries of the merge-able object fields like dependencies/scripts).
  */
-function mergeFirstWins(base: Json, frag: Json): Json {
+export function mergeFirstWins(base: Json, frag: Json): Json {
   const out: Json = { ...base };
   for (const [key, value] of Object.entries(frag)) {
     if (MERGE_FIELDS.includes(key) && isObject(value)) {
@@ -37,7 +37,7 @@ function mergeFirstWins(base: Json, frag: Json): Json {
 }
 
 /** npm-safe package name derived from the project/folder name. */
-function toPackageName(name: string): string {
+export function toPackageName(name: string): string {
   const slug = name
     .toLowerCase()
     .replace(/[^a-z0-9-~._]+/g, "-")
@@ -45,7 +45,7 @@ function toPackageName(name: string): string {
   return slug || "app";
 }
 
-async function readPkg(
+export async function readPkgFragment(
   kind: "project-type" | "stack",
   id: string,
 ): Promise<Json | null> {
@@ -75,14 +75,14 @@ export async function composePackageJson(
   let found = false;
 
   if (projectTypeId) {
-    const base = await readPkg("project-type", projectTypeId);
+    const base = await readPkgFragment("project-type", projectTypeId);
     if (base) {
       result = base;
       found = true;
     }
   }
   for (const id of stackIds) {
-    const frag = await readPkg("stack", id);
+    const frag = await readPkgFragment("stack", id);
     if (frag) {
       result = mergeFirstWins(result, frag);
       found = true;

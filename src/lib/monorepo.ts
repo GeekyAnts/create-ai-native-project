@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { fetchTemplate, readTemplateFile, type TemplateRef } from "./templates.js";
 import { composePackageJson } from "./pkgjson.js";
 import { writeTemplateFiles, type WriteResult } from "./files.js";
-import type { ComposedFile } from "./ci.js";
+import { readCiComposeConfig, type ComposedFile } from "./ci.js";
 import type { AppEntry } from "./manifest.js";
 
 export interface MonorepoPlan {
@@ -25,7 +25,10 @@ export interface MonorepoPlan {
 }
 
 /** Unique, stable job/service name for an app. */
-const appId = (a: AppEntry): string => `${a.group}-${a.name}`;
+export const appId = (a: AppEntry): string => `${a.group}-${a.name}`;
+
+/** The app's directory relative to the workspace root. */
+export const appDirOf = (a: AppEntry): string => `apps/${a.group}/${a.name}`;
 
 const appDir = (a: AppEntry): string => join("apps", a.group, a.name);
 
@@ -59,7 +62,7 @@ export async function composeMonorepoClaudeMd(
 // ---- Per-app Docker & CI composition (transforms on stack fragments) --------
 
 /** Rewrite a stack's compose service for a monorepo app: name, build context, host port. */
-function transformDockerService(
+export function transformDockerService(
   fragment: string,
   service: string,
   context: string,
@@ -75,7 +78,7 @@ function transformDockerService(
 }
 
 /** Rewrite a stack's GitHub job: unique name + run steps scoped to the app dir. */
-function transformGithubJob(fragment: string, job: string, dir: string): string {
+export function transformGithubJob(fragment: string, job: string, dir: string): string {
   const lines = fragment.replace(/\s+$/, "").split("\n");
   lines[0] = `  ${job}:`;
   lines.splice(1, 0, "    defaults:", "      run:", `        working-directory: ${dir}`);
@@ -83,10 +86,44 @@ function transformGithubJob(fragment: string, job: string, dir: string): string 
 }
 
 /** Rewrite a stack's GitLab job: unique name + `cd` into the app dir first. */
-function transformGitlabJob(fragment: string, job: string, dir: string): string {
+export function transformGitlabJob(fragment: string, job: string, dir: string): string {
   const lines = fragment.replace(/\s+$/, "").split("\n");
   lines[0] = `${job}:`;
   return lines.join("\n").replace(/\n  script:\n/, `\n  script:\n    - cd ${dir}\n`);
+}
+
+/**
+ * Build the docker-compose service block for one app: name = <group>-<name>,
+ * build context = the app dir, host port allocated collision-free against
+ * `usedPorts` (which is mutated to claim the chosen port). Returns null for
+ * stacks with no service (e.g. mobile).
+ */
+export async function buildAppServiceBlock(
+  app: AppEntry,
+  usedPorts: Set<number>,
+): Promise<string | null> {
+  const frag = await readTemplateFile("stack", app.stack, "compose.service.yml");
+  if (!frag) return null;
+  const m = frag.match(/"(\d+):(\d+)"/);
+  const desired = m ? Number(m[1]) : 8000;
+  const container = m ? Number(m[2]) : desired;
+  let host = desired;
+  while (usedPorts.has(host)) host++;
+  usedPorts.add(host);
+  return transformDockerService(frag, appId(app), `./${appDirOf(app)}`, host, container);
+}
+
+/** Build the CI job block for one app (fragmentFile: ci.github.yml / ci.gitlab.yml). */
+export async function buildAppJobBlock(
+  app: AppEntry,
+  fragmentFile: string,
+): Promise<string | null> {
+  const frag = await readTemplateFile("stack", app.stack, fragmentFile);
+  if (!frag || frag.trim().length === 0) return null;
+  const dir = appDirOf(app);
+  return fragmentFile === "ci.github.yml"
+    ? transformGithubJob(frag, appId(app), dir)
+    : transformGitlabJob(frag, appId(app), dir);
 }
 
 /**
@@ -113,17 +150,8 @@ export async function composeMonorepoDockerCompose(
 
   const appServices: string[] = [];
   for (const app of apps) {
-    const frag = await readTemplateFile("stack", app.stack, "compose.service.yml");
-    if (!frag) continue; // mobile stacks have no service
-    const m = frag.match(/"(\d+):(\d+)"/);
-    const desired = m ? Number(m[1]) : 8000;
-    const container = m ? Number(m[2]) : desired;
-    let host = desired;
-    while (usedPorts.has(host)) host++;
-    usedPorts.add(host);
-    appServices.push(
-      transformDockerService(frag, appId(app), `./apps/${app.group}/${app.name}`, host, container),
-    );
+    const block = await buildAppServiceBlock(app, usedPorts);
+    if (block) appServices.push(block);
   }
 
   let out = base.replace(/\s+$/, "");
@@ -139,29 +167,16 @@ export async function composeMonorepoCi(
   providerId: string,
   apps: AppEntry[],
 ): Promise<ComposedFile | null> {
-  const manifestRaw = await readTemplateFile("ci", providerId, "template.json");
-  let compose: { base?: string; fragment?: string } | undefined;
-  if (manifestRaw) {
-    try {
-      compose = JSON.parse(manifestRaw).compose;
-    } catch {
-      compose = undefined;
-    }
-  }
-  if (!compose?.base || !compose.fragment) return null;
+  const compose = await readCiComposeConfig(providerId);
+  if (!compose) return null;
 
   const base = await readTemplateFile("ci", providerId, compose.base);
   if (base === null) return null;
 
-  const isGithub = compose.fragment === "ci.github.yml";
   let out = base.replace(/\s+$/, "");
   for (const app of apps) {
-    const frag = await readTemplateFile("stack", app.stack, compose.fragment);
-    if (!frag || frag.trim().length === 0) continue;
-    const dir = `apps/${app.group}/${app.name}`;
-    out += "\n" + (isGithub
-      ? transformGithubJob(frag, appId(app), dir)
-      : transformGitlabJob(frag, appId(app), dir));
+    const block = await buildAppJobBlock(app, compose.fragment);
+    if (block) out += "\n" + block;
   }
   return { path: compose.base, contents: out + "\n" };
 }
@@ -228,6 +243,8 @@ export async function scaffoldMonorepo(
     if (compose) {
       mergeWR(result, await writeTemplateFiles(targetDir, [{ path: compose.path, contents: compose.contents }], { overwrite }));
     }
+    // Verbatim extras shipped by the docker template (e.g. .dockerignore).
+    mergeWR(result, await writeTemplateFiles(targetDir, await fetchTemplate("docker", plan.dockerBaseId), { overwrite }));
   }
 
   // CI: per-app jobs scoped to each app directory.
