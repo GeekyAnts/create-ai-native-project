@@ -22,6 +22,7 @@ import {
 import { composeClaudeMd } from "../lib/claudemd.js";
 import { composePackageJson } from "../lib/pkgjson.js";
 import { composeDockerCompose } from "../lib/compose.js";
+import { composeCi } from "../lib/ci.js";
 import { writeTemplateFiles, type WriteResult } from "../lib/files.js";
 import { isExistingProject } from "../lib/project.js";
 import { detectPackageManager, runInstall } from "../lib/install.js";
@@ -277,7 +278,16 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     for (const id of selectedDatabases) merge(result, await copy("database", id, targetDir, overwrite));
     for (const id of selectedStorage) merge(result, await copy("storage", id, targetDir, overwrite));
     for (const id of selectedAuth) merge(result, await copy("auth", id, targetDir, overwrite));
-    for (const id of selectedCi) merge(result, await copy("ci", id, targetDir, overwrite));
+    // CI: compose a per-stack pipeline from the provider base + each stack's job fragment.
+    const stackRefs: TemplateRef[] = selectedStacks.map((id) => ({ kind: "stack" as const, id }));
+    for (const id of selectedCi) {
+      const composed = await composeCi(id, stackRefs);
+      if (composed) {
+        merge(result, await writeFile(targetDir, composed.path, composed.contents, overwrite));
+      } else {
+        merge(result, await copy("ci", id, targetDir, overwrite));
+      }
+    }
     for (const id of selectedDocs) merge(result, await copy("docs", id, targetDir, overwrite));
     const skillsToInstall = unionStr(core.skills, selectedSkills);
     const agentsToInstall = unionStr(core.agents, selectedAgents);
