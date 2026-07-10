@@ -7,12 +7,19 @@
  * from disk. Switch the source by editing .env — no code change required.
  *
  * Expected registry layout:
- *   skills/<id>/     one directory per skill  (+ optional template.json)
- *   agents/<id>/     one directory per agent  (+ optional template.json)
- *   claude/<id>/     CLAUDE.md template(s), e.g. claude/default/CLAUDE.md
+ *   project-types/<id>/  one per project shape (monorepo, single, …)
+ *   stacks/<id>/         one per tech stack (react, node-nest, …)
+ *   skills/<id>/         one directory per skill
+ *   agents/<id>/         one directory per agent
+ *   claude/<id>/         base CLAUDE.md template(s), e.g. claude/default/CLAUDE.md
  *
  * template.json (optional, per template): { "name": string, "description": string }
- * Files within a template directory are copied into the target project at the
+ *
+ * CLAUDE.md composition (see readTemplateFile + the CLI's composer):
+ *   - A project-type may provide `CLAUDE.md` — the base knowledge base.
+ *   - A stack may provide `CLAUDE.section.md` — appended to the base.
+ * These "compose files" (plus template.json) are NOT copied verbatim; every
+ * other file in a template directory IS copied into the target project at the
  * default location for that kind (see TARGET_ROOT), preserving sub-paths.
  */
 
@@ -24,7 +31,15 @@ import { dirname, join, relative } from "node:path";
 
 const exec = promisify(execFile);
 
-export type TemplateKind = "skill" | "agent" | "claude";
+export type TemplateKind =
+  | "project-type"
+  | "stack"
+  | "skill"
+  | "agent"
+  | "claude";
+
+/** Files handled by the CLAUDE.md composer — never copied verbatim. */
+const COMPOSE_FILES = new Set(["template.json", "CLAUDE.md", "CLAUDE.section.md"]);
 
 export interface TemplateMeta {
   id: string;
@@ -48,13 +63,17 @@ const CACHE_DIR = join(homedir(), ".cache", "create-ai-native-project", "registr
 
 /** Directory in the registry repo that holds each kind of template. */
 const KIND_DIR: Record<TemplateKind, string> = {
+  "project-type": "project-types",
+  stack: "stacks",
   skill: "skills",
   agent: "agents",
   claude: "claude",
 };
 
-/** Where a template's files land in the target project, by kind. */
+/** Where a template's (verbatim) files land in the target project, by kind. */
 const TARGET_ROOT: Record<TemplateKind, (id: string) => string> = {
+  "project-type": () => "",
+  stack: () => "",
   skill: (id) => join(".claude", "skills", id),
   agent: () => join(".claude", "agents"),
   claude: () => "",
@@ -155,10 +174,16 @@ export async function listTemplates(kind: TemplateKind): Promise<TemplateMeta[]>
   return metas;
 }
 
+export const listProjectTypes = () => listTemplates("project-type");
+export const listStacks = () => listTemplates("stack");
 export const listSkills = () => listTemplates("skill");
 export const listAgents = () => listTemplates("agent");
 
-/** Read a template's files, mapped to their target-project-relative paths. */
+/**
+ * Read the verbatim (setup) files of a template, mapped to their
+ * target-project-relative paths. Compose files (CLAUDE.md / CLAUDE.section.md /
+ * template.json) are excluded — those are handled by the CLAUDE.md composer.
+ */
 export async function fetchTemplate(
   kind: TemplateKind,
   id: string,
@@ -173,9 +198,21 @@ export async function fetchTemplate(
   const relPaths = await walk(tplDir);
   const files: TemplateFile[] = [];
   for (const rel of relPaths) {
-    if (rel === "template.json") continue;
+    if (COMPOSE_FILES.has(rel)) continue;
     const contents = await readFile(join(tplDir, rel), "utf8");
     files.push({ path: targetRoot ? join(targetRoot, rel) : rel, contents });
   }
   return files;
+}
+
+/** Read a single named file from a template, or null if it doesn't exist. */
+export async function readTemplateFile(
+  kind: TemplateKind,
+  id: string,
+  file: string,
+): Promise<string | null> {
+  const repo = await ensureRegistry();
+  const target = join(repo, KIND_DIR[kind], id, file);
+  if (!(await exists(target))) return null;
+  return readFile(target, "utf8");
 }
