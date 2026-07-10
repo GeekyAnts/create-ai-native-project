@@ -34,12 +34,49 @@ const exec = promisify(execFile);
 export type TemplateKind =
   | "project-type"
   | "stack"
+  | "database"
+  | "storage"
+  | "docker"
+  | "docs"
   | "skill"
   | "agent"
   | "claude";
 
-/** Files handled by the CLAUDE.md composer — never copied verbatim. */
-const COMPOSE_FILES = new Set(["template.json", "CLAUDE.md", "CLAUDE.section.md"]);
+/** A reference to a chosen template, used by the composers. */
+export interface TemplateRef {
+  kind: TemplateKind;
+  id: string;
+}
+
+/** Kinds whose CLAUDE.section.md / compose.service.yml are composed, not copied. */
+const FRAGMENT_KINDS: TemplateKind[] = [
+  "project-type",
+  "stack",
+  "database",
+  "storage",
+];
+
+/**
+ * Files handled by a composer rather than copied verbatim:
+ *   - `template.json` (picker metadata) — always withheld.
+ *   - `CLAUDE.section.md` / `compose.service.yml` — fragments for project-type,
+ *     stack, database, storage (appended into CLAUDE.md / docker-compose.yml).
+ *   - `CLAUDE.md` / `package.json` — base files for project-type & stack.
+ *   - `docker-compose.yml` — the docker base template composes this from fragments.
+ * Everything else is copied verbatim — e.g. a `docs/` sub-project keeps its own
+ * package.json, and `requirements.txt` / config files are dropped as setup.
+ */
+function isComposeFile(kind: TemplateKind, rel: string): boolean {
+  if (rel === "template.json") return true;
+  if (FRAGMENT_KINDS.includes(kind)) {
+    if (rel === "CLAUDE.section.md" || rel === "compose.service.yml") return true;
+  }
+  if (kind === "project-type" || kind === "stack") {
+    if (rel === "CLAUDE.md" || rel === "package.json") return true;
+  }
+  if (kind === "docker" && rel === "docker-compose.yml") return true;
+  return false;
+}
 
 export interface TemplateMeta {
   id: string;
@@ -65,6 +102,10 @@ const CACHE_DIR = join(homedir(), ".cache", "create-ai-native-project", "registr
 const KIND_DIR: Record<TemplateKind, string> = {
   "project-type": "project-types",
   stack: "stacks",
+  database: "databases",
+  storage: "storage",
+  docker: "docker",
+  docs: "docs",
   skill: "skills",
   agent: "agents",
   claude: "claude",
@@ -74,6 +115,10 @@ const KIND_DIR: Record<TemplateKind, string> = {
 const TARGET_ROOT: Record<TemplateKind, (id: string) => string> = {
   "project-type": () => "",
   stack: () => "",
+  database: () => "",
+  storage: () => "",
+  docker: () => "",
+  docs: () => "docs",
   skill: (id) => join(".claude", "skills", id),
   agent: () => join(".claude", "agents"),
   claude: () => "",
@@ -176,6 +221,9 @@ export async function listTemplates(kind: TemplateKind): Promise<TemplateMeta[]>
 
 export const listProjectTypes = () => listTemplates("project-type");
 export const listStacks = () => listTemplates("stack");
+export const listDatabases = () => listTemplates("database");
+export const listStorage = () => listTemplates("storage");
+export const listDocs = () => listTemplates("docs");
 export const listSkills = () => listTemplates("skill");
 export const listAgents = () => listTemplates("agent");
 
@@ -198,7 +246,7 @@ export async function fetchTemplate(
   const relPaths = await walk(tplDir);
   const files: TemplateFile[] = [];
   for (const rel of relPaths) {
-    if (COMPOSE_FILES.has(rel)) continue;
+    if (isComposeFile(kind, rel)) continue;
     const contents = await readFile(join(tplDir, rel), "utf8");
     files.push({ path: targetRoot ? join(targetRoot, rel) : rel, contents });
   }
