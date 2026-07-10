@@ -8,6 +8,13 @@ import { join } from "node:path";
  */
 export const MANIFEST_FILE = ".ai-native-project.json";
 
+/** A monorepo app: a stack scaffolded under apps/<group>/<name>/. */
+export interface AppEntry {
+  group: string;
+  name: string;
+  stack: string;
+}
+
 export interface ProjectManifest {
   generator: string;
   version: string;
@@ -15,6 +22,7 @@ export interface ProjectManifest {
   updatedAt: string;
   projectType: string | null;
   stacks: string[];
+  apps: AppEntry[];
   databases: string[];
   storage: string[];
   auth: string[];
@@ -44,6 +52,13 @@ const union = (a: string[] = [], b: string[] = []): string[] => [
   ...new Set([...a, ...b]),
 ];
 
+/** Union apps by group/name (later entries win on the same key). */
+function unionApps(a: AppEntry[] = [], b: AppEntry[] = []): AppEntry[] {
+  const byKey = new Map<string, AppEntry>();
+  for (const app of [...a, ...b]) byKey.set(`${app.group}/${app.name}`, app);
+  return [...byKey.values()];
+}
+
 /**
  * Merge `next` into any existing manifest (arrays unioned, createdAt preserved)
  * and write it back. Always overwrites the manifest file with the merged result.
@@ -63,6 +78,7 @@ export async function writeManifest(
     // Project type is fixed once set — an existing value always wins.
     projectType: prev?.projectType ?? next.projectType ?? null,
     stacks: union(prev?.stacks, next.stacks),
+    apps: unionApps(prev?.apps, next.apps),
     databases: union(prev?.databases, next.databases),
     storage: union(prev?.storage, next.storage),
     auth: union(prev?.auth, next.auth),

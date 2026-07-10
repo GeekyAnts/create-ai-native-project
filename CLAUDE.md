@@ -211,6 +211,9 @@ Claude) stay aware of what's set up and skip inapplicable actions.
 | 2026-07-10 | **Per-stack agents auto-install:** each stack bundles `.claude/agents/<stack>.md`, copied with the stack | Selecting a stack installs its specialist agent, no extra prompt |
 | 2026-07-10 | **Core set (`core.json`):** `engineering-standards` skill + `code-reviewer` + `security-reviewer` agents install on every project (hidden from pickers); registry-editable | Foundational quality/security guardrails always present, no CLI release to change |
 | 2026-07-10 | **Per-stack CI:** CI providers declare `compose: {base, fragment}`; the pipeline is base skeleton + each selected stack's `ci.<provider>.yml` job (new `lib/ci.ts`) | CI reflects the actual stacks, not a generic pipeline |
+| 2026-07-10 | **Monorepo layout:** grouped under `apps/<group>/<app>` + `packages/*`, Turborepo + pnpm (industry standard) | Keeps frontend/backend/mobile grouping while matching tooling conventions |
+| 2026-07-10 | **Monorepo apps:** prompt for apps (group/name/stack) at create; re-running the generator adds more (no separate command). Stack code → app dir; agents/skills → root `.claude/`; per-app `package.json` | One stack per deployable app; shared code in `packages/*` |
+| 2026-07-10 | **Injected core skill** `using-create-ai-native-project` documents how to extend the project (re-run to add apps/stacks) | Claude knows how to add things without breaking structure |
 
 ### 9.3 Registry (template source)
 The CLI reads skills, agents, and the CLAUDE.md template from a **git repo**,
@@ -274,6 +277,7 @@ src/
     pkgjson.ts        # compose package.json (project-type base + stack fragments, first-wins)
     compose.ts        # compose docker-compose.yml (base + compose.service.yml fragments)
     ci.ts             # compose CI pipeline (provider base + per-stack ci.<provider>.yml)
+    monorepo.ts       # scaffold monorepo: apps under apps/<group>/<app>, agents→root, per-app package.json
     manifest.ts       # read/merge/write .ai-native-project.json (project state)
                       # (templates.ts readCore() reads registry core.json)
     install.ts        # detect pnpm/npm + run install
@@ -305,3 +309,4 @@ tsconfig.json         # strict TS, Bundler resolution
 - 2026-07-10 — Made those a **core set** (new `core.json` + `templates.ts` `readCore()`): `engineering-standards`, `code-reviewer`, `security-reviewer` install on every project regardless of selection and are hidden from the pickers; core is registry-editable. Verified: with zero skill/agent selections all three still install; core ids excluded from picker options. Registry `core.json` pushed to `main`.
 - 2026-07-10 — Added **`knowledge-base`** to the core set (registry `core.json` edit; no CLI change). Core is now skills `engineering-standards` + `knowledge-base`, agents `code-reviewer` + `security-reviewer`. Verified all four install with zero selections; since both skills are core the skills picker is empty (auto-skipped).
 - 2026-07-10 — Added the **Next.js** stack (Next 15 App Router: boilerplate, Dockerfile, agent, package.json, compose service, CLAUDE section, CI fragments) and reworked CI to be **per-stack composed** (new `lib/ci.ts`; provider `template.json` `compose` config; each stack ships `ci.github.yml` / `ci.gitlab.yml` job fragments). Verified end-to-end (nextjs+python-fastapi+node-nest → valid GitHub + GitLab pipelines with a job per stack; Next.js installs boilerplate + agent). Committed via branch `feat/nextjs-and-per-stack-ci` → MR → merged to `main`.
+- 2026-07-10 — **Monorepo apps** (new `lib/monorepo.ts`): monorepo runs a dedicated flow that prompts for apps (group/name/stack) and scaffolds each under `apps/<group>/<name>/` (grouped-under-apps layout, Turborepo + pnpm workspace globs `apps/*/*` + `packages/*`, shared `packages/tsconfig`). Per-app `package.json` (name = app), stack code in the app dir, stack agents + skills routed to the workspace root `.claude/`, and per-app CLAUDE.md sections. Adding apps later = re-run the generator (reads manifest, merges). Manifest gained `apps[]`. Injected a core skill **`using-create-ai-native-project`** (how to extend the project). Verified end-to-end (3 apps across frontend/backend/mobile + workspace Postgres: correct dirs, per-app pkg, agents at root, valid turbo/workspace config). Committed via branch `feat/monorepo-apps` → MR → merged to `main`. Docker/CI per-app for monorepo deferred (needs per-app build contexts/ports).
