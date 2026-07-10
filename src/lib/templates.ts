@@ -50,6 +50,12 @@ export interface TemplateRef {
   id: string;
 }
 
+/** Templates installed on every project regardless of selection (from core.json). */
+export interface CoreSet {
+  skills: string[];
+  agents: string[];
+}
+
 /** Kinds whose CLAUDE.section.md / compose.service.yml are composed, not copied. */
 const FRAGMENT_KINDS: TemplateKind[] = [
   "project-type",
@@ -260,6 +266,25 @@ export async function fetchTemplate(
     files.push({ path: targetRoot ? join(targetRoot, rel) : rel, contents });
   }
   return files;
+}
+
+/**
+ * Read the core set (`core.json` at the registry root): skills/agents that are
+ * installed on every project regardless of what the user selects.
+ */
+export async function readCore(): Promise<CoreSet> {
+  const repo = await ensureRegistry();
+  const file = join(repo, "core.json");
+  if (!(await exists(file))) return { skills: [], agents: [] };
+  try {
+    const parsed = JSON.parse(await readFile(file, "utf8"));
+    return {
+      skills: Array.isArray(parsed?.skills) ? parsed.skills : [],
+      agents: Array.isArray(parsed?.agents) ? parsed.agents : [],
+    };
+  } catch {
+    return { skills: [], agents: [] };
+  }
 }
 
 /** Read a single named file from a template, or null if it doesn't exist. */

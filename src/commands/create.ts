@@ -13,7 +13,9 @@ import {
   listStacks,
   listStorage,
   listTemplates,
+  readCore,
   fetchTemplate,
+  type CoreSet,
   type TemplateMeta,
   type TemplateRef,
 } from "../lib/templates.js";
@@ -109,8 +111,9 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   let skillOptions: Option[] = [];
   let agentOptions: Option[] = [];
   let dockerBaseId: string | null = null;
+  let core: CoreSet = { skills: [], agents: [] };
   try {
-    const [pts, sts, dbs, sto, auth, ci, dockers, docs, sk, ag] =
+    const [pts, sts, dbs, sto, auth, ci, dockers, docs, sk, ag, coreSet] =
       await Promise.all([
         listProjectTypes(),
         listStacks(),
@@ -122,7 +125,9 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
         listDocs(),
         listSkills(),
         listAgents(),
+        readCore(),
       ]);
+    core = coreSet;
     projectTypes = toOptions(pts);
     stacks = toOptions(sts);
     databases = toOptions(dbs);
@@ -130,11 +135,18 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     authOptions = toOptions(auth);
     ciOptions = toOptions(ci);
     docsOptions = toOptions(docs);
-    skillOptions = toOptions(sk);
-    agentOptions = toOptions(ag);
+    // Core skills/agents are always installed — don't offer them in the pickers.
+    skillOptions = toOptions(sk).filter((o) => !core.skills.includes(o.value));
+    agentOptions = toOptions(ag).filter((o) => !core.agents.includes(o.value));
     dockerBaseId =
       dockers.find((d) => d.id === "compose")?.id ?? dockers[0]?.id ?? null;
     spin.stop("Loaded template registry.");
+    if (core.skills.length || core.agents.length) {
+      p.log.info(
+        `Core (always installed) — skills: [${core.skills.join(", ") || "—"}], ` +
+          `agents: [${core.agents.join(", ") || "—"}]`,
+      );
+    }
   } catch (err) {
     spin.stop(pc.yellow("Could not reach the template registry."));
     p.log.warn(String(err instanceof Error ? err.message : err));
@@ -267,8 +279,10 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     for (const id of selectedAuth) merge(result, await copy("auth", id, targetDir, overwrite));
     for (const id of selectedCi) merge(result, await copy("ci", id, targetDir, overwrite));
     for (const id of selectedDocs) merge(result, await copy("docs", id, targetDir, overwrite));
-    for (const id of selectedSkills) merge(result, await copy("skill", id, targetDir, overwrite));
-    for (const id of selectedAgents) merge(result, await copy("agent", id, targetDir, overwrite));
+    const skillsToInstall = unionStr(core.skills, selectedSkills);
+    const agentsToInstall = unionStr(core.agents, selectedAgents);
+    for (const id of skillsToInstall) merge(result, await copy("skill", id, targetDir, overwrite));
+    for (const id of agentsToInstall) merge(result, await copy("agent", id, targetDir, overwrite));
     build.stop(`Wrote ${result.written.length} file(s).`);
   } catch (err) {
     build.stop(pc.red("Scaffolding failed."));
