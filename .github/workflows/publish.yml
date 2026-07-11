@@ -26,12 +26,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # NOTE: no `registry-url` here on purpose. setup-node's registry-url writes
+      # an .npmrc with a placeholder `_authToken`, which npm would use instead of
+      # doing the OIDC exchange (causing a 404 on publish). With no token
+      # configured, npm falls back to Trusted Publishing (OIDC) against the
+      # default registry.
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          registry-url: https://registry.npmjs.org
 
       # OIDC Trusted Publishing requires npm >= 11.5.1 (Node 22 ships npm 10.x).
       # Pin to npm 11 — npm@latest is now 12, which needs Node >= 22.22/24.15.
