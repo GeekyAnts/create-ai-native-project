@@ -26,16 +26,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # NOTE: no `registry-url` here on purpose. setup-node's registry-url writes
-      # an .npmrc with a placeholder `_authToken`, which npm would use instead of
-      # doing the OIDC exchange (causing a 404 on publish). With no token
-      # configured, npm falls back to Trusted Publishing (OIDC) against the
-      # default registry.
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
+          registry-url: https://registry.npmjs.org
 
       # OIDC Trusted Publishing requires npm >= 11.5.1. Node 24 ships npm 11.x;
       # pin the latest 11.x to be sure (npm@latest is 12 with stricter engines).
@@ -64,5 +60,6 @@ jobs:
 
       # `npm publish` runs prepublishOnly (typecheck + test + build) first.
       # Auth via OIDC Trusted Publishing — no NODE_AUTH_TOKEN needed.
+      # (verbose temporarily, to trace the OIDC exchange while validating setup)
       - name: Publish
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --loglevel verbose
