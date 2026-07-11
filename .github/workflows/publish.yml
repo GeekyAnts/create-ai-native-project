@@ -2,7 +2,9 @@ name: Publish to npm
 
 # Publishes the package to npm when a GitHub Release is published (recommended
 # flow: bump the version, then cut a release tagged vX.Y.Z). Can also be run
-# manually. Requires an `NPM_TOKEN` repo secret (an npm automation token).
+# manually. Auth is via npm Trusted Publishing (OIDC) — no token/secret needed;
+# it relies on `id-token: write` + the `release` environment matching the npm
+# Trusted Publisher config. Provenance is attached automatically.
 on:
   release:
     types: [published]
@@ -31,6 +33,10 @@ jobs:
           cache: npm
           registry-url: https://registry.npmjs.org
 
+      # OIDC Trusted Publishing requires npm >= 11.5.1; Node 20 ships npm 10.x.
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
       - name: Install dependencies
         run: npm ci
 
@@ -48,7 +54,6 @@ jobs:
           fi
 
       # `npm publish` runs prepublishOnly (typecheck + test + build) first.
+      # Auth via OIDC Trusted Publishing — no NODE_AUTH_TOKEN needed.
       - name: Publish
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
