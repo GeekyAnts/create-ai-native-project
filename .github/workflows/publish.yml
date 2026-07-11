@@ -15,6 +15,11 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # Gated GitHub Actions environment. The name must match the npm Trusted
+    # Publisher config exactly (OIDC matches the environment claim). Add
+    # protection rules (required reviewers / allowed branches) in
+    # Settings → Environments → release.
+    environment: release
     steps:
       - name: Checkout
         uses: actions/checkout@v4
