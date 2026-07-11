@@ -60,6 +60,5 @@ jobs:
 
       # `npm publish` runs prepublishOnly (typecheck + test + build) first.
       # Auth via OIDC Trusted Publishing — no NODE_AUTH_TOKEN needed.
-      # (verbose temporarily, to trace the OIDC exchange while validating setup)
       - name: Publish
-        run: npm publish --provenance --access public --loglevel verbose
+        run: npm publish --provenance --access public
