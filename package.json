@@ -4,7 +4,7 @@
   "description": "Interactive CLI to scaffold AI-native projects for Claude Code, OpenAI Codex, and OpenCode — instructions, skills, agents, stacks, Docker, and CI",
   "type": "module",
   "bin": {
-    "create-ai-native-project": "./dist/index.js"
+    "create-ai-native-project": "dist/index.js"
   },
   "files": [
     "dist"
