@@ -3,10 +3,18 @@ import { fetchTemplate, readTemplateFile, type TemplateRef } from "./templates.j
 import { composePackageJson } from "./pkgjson.js";
 import { writeTemplateFiles, type WriteResult } from "./files.js";
 import { readCiComposeConfig, type ComposedFile } from "./ci.js";
+import {
+  instructionFiles,
+  opencodeConfig,
+  retargetForTools,
+  type ToolId,
+} from "./tools.js";
 import type { AppEntry } from "./manifest.js";
 
 export interface MonorepoPlan {
   projectName: string;
+  /** Agentic coding tools to target (drives instruction file + agent layouts). */
+  tools: ToolId[];
   apps: AppEntry[];
   /** databases/storage/auth — contribute CLAUDE.md sections. */
   sectionRefs: TemplateRef[];
@@ -191,13 +199,20 @@ async function installApp(
   targetDir: string,
   app: AppEntry,
   overwrite: boolean,
+  tools: ToolId[],
 ): Promise<WriteResult> {
   const dir = appDir(app);
   const files = await fetchTemplate("stack", app.stack);
-  const routed = files.map((f) =>
-    f.path.startsWith(".claude/") ? f : { ...f, path: join(dir, f.path) },
+  // Workspace-wide pieces (agents/skills) stay at root and are retargeted per
+  // tool; the rest of the stack code is placed under the app directory.
+  const claudeFiles = retargetForTools(
+    files.filter((f) => f.path.startsWith(".claude/")),
+    tools,
   );
-  const result = await writeTemplateFiles(targetDir, routed, { overwrite });
+  const appFiles = files
+    .filter((f) => !f.path.startsWith(".claude/"))
+    .map((f) => ({ ...f, path: join(dir, f.path) }));
+  const result = await writeTemplateFiles(targetDir, [...claudeFiles, ...appFiles], { overwrite });
 
   const pkg = await composePackageJson(app.name, null, [app.stack]);
   if (pkg) {
@@ -232,10 +247,14 @@ export async function scaffoldMonorepo(
 
   if (plan.includeClaudeMd) {
     const md = await composeMonorepoClaudeMd(plan.apps, plan.sectionRefs);
-    if (md) mergeWR(result, await writeTemplateFiles(targetDir, [{ path: "CLAUDE.md", contents: md }], { overwrite }));
+    if (md) {
+      for (const fname of instructionFiles(plan.tools)) {
+        mergeWR(result, await writeTemplateFiles(targetDir, [{ path: fname, contents: md }], { overwrite }));
+      }
+    }
   }
 
-  for (const app of plan.apps) mergeWR(result, await installApp(targetDir, app, overwrite));
+  for (const app of plan.apps) mergeWR(result, await installApp(targetDir, app, overwrite, plan.tools));
 
   // Docker: per-app services (build context + unique host port) + db/storage.
   if (plan.docker && plan.dockerBaseId) {
@@ -255,11 +274,16 @@ export async function scaffoldMonorepo(
     }
   }
 
-  // Workspace-level extras.
+  // Workspace-level extras. Skills/agents are retargeted to each tool's layout.
   for (const id of plan.docs) mergeWR(result, await writeTemplateFiles(targetDir, await fetchTemplate("docs", id), { overwrite }));
-  for (const id of plan.auth) mergeWR(result, await writeTemplateFiles(targetDir, await fetchTemplate("auth", id), { overwrite }));
-  for (const id of plan.skills) mergeWR(result, await writeTemplateFiles(targetDir, await fetchTemplate("skill", id), { overwrite }));
-  for (const id of plan.agents) mergeWR(result, await writeTemplateFiles(targetDir, await fetchTemplate("agent", id), { overwrite }));
+  for (const id of plan.auth) mergeWR(result, await writeTemplateFiles(targetDir, retargetForTools(await fetchTemplate("auth", id), plan.tools), { overwrite }));
+  for (const id of plan.skills) mergeWR(result, await writeTemplateFiles(targetDir, retargetForTools(await fetchTemplate("skill", id), plan.tools), { overwrite }));
+  for (const id of plan.agents) mergeWR(result, await writeTemplateFiles(targetDir, retargetForTools(await fetchTemplate("agent", id), plan.tools), { overwrite }));
+
+  // opencode.json marks the workspace as OpenCode-aware (skip-if-exists on add).
+  if (plan.tools.includes("opencode")) {
+    mergeWR(result, await writeTemplateFiles(targetDir, [{ path: "opencode.json", contents: opencodeConfig() }], { overwrite }));
+  }
 
   return result;
 }

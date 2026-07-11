@@ -1,5 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { normalizeTools, type ToolId } from "./tools.js";
 
 /**
  * A manifest written into every scaffolded project so the tool (and Claude) can
@@ -21,6 +22,8 @@ export interface ProjectManifest {
   createdAt: string;
   updatedAt: string;
   projectType: string | null;
+  /** Agentic coding tools this project targets (claude-code / codex / opencode). */
+  tools: ToolId[];
   stacks: string[];
   apps: AppEntry[];
   databases: string[];
@@ -42,7 +45,10 @@ export async function readManifest(dir: string): Promise<ProjectManifest | null>
   try {
     const raw = await readFile(join(dir, MANIFEST_FILE), "utf8");
     const parsed = JSON.parse(raw);
-    return typeof parsed === "object" && parsed !== null ? parsed : null;
+    if (typeof parsed !== "object" || parsed === null) return null;
+    // Backward compat: projects created before tool selection were Claude Code.
+    parsed.tools = normalizeTools(parsed.tools);
+    return parsed;
   } catch {
     return null;
   }
@@ -77,6 +83,7 @@ export async function writeManifest(
     updatedAt: now,
     // Project type is fixed once set — an existing value always wins.
     projectType: prev?.projectType ?? next.projectType ?? null,
+    tools: normalizeTools(union(prev?.tools, next.tools)),
     stacks: union(prev?.stacks, next.stacks),
     apps: unionApps(prev?.apps, next.apps),
     databases: union(prev?.databases, next.databases),

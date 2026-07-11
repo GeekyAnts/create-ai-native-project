@@ -6,6 +6,7 @@ import { readManifest, writeManifest, type ManifestState } from "../src/lib/mani
 
 const state = (over: Partial<ManifestState> = {}): ManifestState => ({
   projectType: "single",
+  tools: [],
   stacks: [],
   apps: [],
   databases: [],
@@ -87,5 +88,19 @@ describe("manifest", () => {
 
   it("returns null when no manifest exists", async () => {
     expect(await readManifest(dir)).toBeNull();
+  });
+
+  it("defaults tools to claude-code and unions tool selections", async () => {
+    // No tools specified -> backward-compat default.
+    const fresh = await writeManifest(dir, state(), "0.3.0", "2026-07-10T00:00:00.000Z");
+    expect(fresh.tools).toEqual(["claude-code"]);
+    // Adding a tool later unions with the existing set.
+    const merged = await writeManifest(
+      dir,
+      state({ tools: ["opencode", "codex"] }),
+      "0.3.0",
+      "2026-07-11T00:00:00.000Z",
+    );
+    expect(merged.tools).toEqual(["claude-code", "opencode", "codex"]);
   });
 });
