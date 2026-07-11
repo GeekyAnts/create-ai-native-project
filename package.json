@@ -1,6 +1,6 @@
 {
   "name": "create-ai-native-project",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "description": "Interactive CLI to scaffold AI-native projects with CLAUDE.md, skills, and agents",
   "type": "module",
   "bin": {
@@ -32,9 +32,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://git.geekyants.com/geekyants/create-ai-native-project.git"
+    "url": "git+https://github.com/GeekyAnts/create-ai-native-project.git"
   },
-  "homepage": "https://git.geekyants.com/geekyants/create-ai-native-project",
+  "bugs": {
+    "url": "https://github.com/GeekyAnts/create-ai-native-project/issues"
+  },
+  "homepage": "https://github.com/GeekyAnts/create-ai-native-project#readme",
   "dependencies": {
     "@clack/prompts": "^0.7.0",
     "commander": "^12.1.0",

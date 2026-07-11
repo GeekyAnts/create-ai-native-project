@@ -107,7 +107,7 @@ export interface TemplateFile {
 
 export const REGISTRY_URL =
   process.env.CLAUDE_SETUP_REGISTRY ??
-  "git@git.geekyants.com:geekyants/claude-registry.git";
+  "https://github.com/GeekyAnts/agentic-coding-registry.git";
 export const REGISTRY_REF = process.env.CLAUDE_SETUP_REGISTRY_REF ?? "main";
 
 const CACHE_DIR = join(homedir(), ".cache", "create-ai-native-project", "registry");
@@ -176,6 +176,9 @@ async function clone(): Promise<string> {
 }
 
 async function pull(): Promise<void> {
+  // Realign the cached clone's origin with the configured URL so that moving
+  // the registry (or switching CLAUDE_SETUP_REGISTRY) takes effect on `update`.
+  await exec("git", ["-C", CACHE_DIR, "remote", "set-url", "origin", REGISTRY_URL]);
   await exec("git", ["-C", CACHE_DIR, "fetch", "--depth", "1", "origin", REGISTRY_REF]);
   await exec("git", ["-C", CACHE_DIR, "reset", "--hard", `origin/${REGISTRY_REF}`]);
 }
