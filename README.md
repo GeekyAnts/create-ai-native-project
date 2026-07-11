@@ -1,9 +1,11 @@
 # create-ai-native-project
 
-Interactive CLI that makes a project **AI-native**: it scaffolds a
-[CLAUDE.md](https://docs.claude.com/en/docs/claude-code/memory) knowledge base,
-Claude Code **skills** and **agents**, runnable **stack boilerplate**,
-**docker-compose**, and **CI** — all composed from a central template registry.
+Interactive CLI that makes a project **AI-native**: it scaffolds an instructions
+file (`CLAUDE.md` / `AGENTS.md`), reusable **skills** and **agents**, runnable
+**stack boilerplate**, **docker-compose**, and **CI** for **Claude Code, OpenAI
+Codex, and OpenCode** — all composed from a central template registry.
+
+📖 **[Documentation →](https://geekyants.github.io/create-ai-native-project/)**
 
 ## Usage
 
@@ -26,13 +28,17 @@ npx create-ai-native-project update
 
 ## What it asks
 
-1. **Project type** — `single` or `monorepo` (fixed once set).
-2. **Tech stack(s)** — React, Next.js, React Native, Flutter, NestJS, Laravel,
+1. **Agentic coding tool(s)** — Claude Code, OpenAI Codex, and/or OpenCode. One
+   source is retargeted per tool: `CLAUDE.md`/`AGENTS.md`, `.claude`/`.opencode`/
+   `.codex` agents, and shared skills. See
+   [Agentic Coding Tools](https://geekyants.github.io/create-ai-native-project/guide/coding-tools).
+2. **Project type** — `single` or `monorepo` (fixed once set).
+3. **Tech stack(s)** — React, Next.js, React Native, Flutter, NestJS, Laravel,
    Python FastAPI, Python Streamlit — each ships runnable boilerplate, a
-   Dockerfile, CI job fragments, and a specialist Claude agent.
-3. **Databases** (Postgres/MySQL/MongoDB), **storage** (MinIO/AWS S3),
-   **auth** (JWT/Clerk) — each contributes CLAUDE.md sections and compose services.
-4. **Skills / agents**, an optional **docs site** (Docusaurus), **CI**
+   Dockerfile, CI job fragments, and a specialist agent.
+4. **Databases** (Postgres/MySQL/MongoDB), **storage** (MinIO/AWS S3),
+   **auth** (JWT/Clerk) — each contributes instructions sections and compose services.
+5. **Skills / agents**, an optional **docs site** (Docusaurus), **CI**
    (GitHub Actions / GitLab CI — one job per stack/app), and **Docker**
    (docker-compose composed from your selections).
 
