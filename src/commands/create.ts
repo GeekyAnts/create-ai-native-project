@@ -55,6 +55,15 @@ import {
   type Block,
 } from "../lib/augment.js";
 import { slugSegment } from "../lib/names.js";
+import {
+  AGENTIC_TOOLS,
+  installedNames,
+  instructionFiles,
+  normalizeTools,
+  opencodeConfig,
+  retargetForTools,
+  type ToolId,
+} from "../lib/tools.js";
 import { VERSION } from "../lib/version.js";
 
 export interface CreateOptions {
@@ -129,6 +138,11 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
           : ""),
     );
   }
+
+  // Which agentic coding tool(s) this project targets — drives which
+  // instruction file(s) and agent/skill layouts get generated.
+  const selectedTools = await pickTools(existingManifest?.tools);
+  if (selectedTools === null) return p.cancel("Cancelled.");
 
   // 2. Load everything the registry offers.
   const spin = p.spinner();
@@ -219,6 +233,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     return runMonorepoFlow({
       targetDir,
       mode,
+      tools: selectedTools,
       stacks,
       databases,
       storage,
@@ -326,8 +341,9 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     wantDocker = res;
   }
 
+  const instrFiles = instructionFiles(selectedTools);
   const includeClaudeMd = await p.confirm({
-    message: "Generate CLAUDE.md (composed from project type + selections)?",
+    message: `Generate the instructions file (${instrFiles.join(" + ")}, composed from project type + selections)?`,
     initialValue: true,
   });
   if (p.isCancel(includeClaudeMd)) return p.cancel("Cancelled.");
@@ -359,16 +375,20 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   const result: WriteResult = { written: [], skipped: [] };
   const pkgPath = resolve(targetDir, "package.json");
   try {
-    // CLAUDE.md: compose fresh, or append the new sections to an existing one.
+    // Instructions file(s): CLAUDE.md (Claude Code) and/or AGENTS.md (Codex,
+    // OpenCode) — same composed content. Compose fresh, or append new sections
+    // to an existing file. A newly selected tool's file is created from scratch.
     if (includeClaudeMd) {
-      const existing = isAdd ? await readIfExists(resolve(targetDir, "CLAUDE.md")) : null;
-      if (existing === null) {
-        const claudeMd = await composeClaudeMd(projectType, isAdd ? mergedRefs : refs);
-        if (claudeMd) merge(result, await writeFile(targetDir, "CLAUDE.md", claudeMd, overwrite));
-      } else {
-        const blocks = await sectionBlocks(refs);
-        const { content, added } = appendBlocks(existing, blocks, "\n\n");
-        if (added.length > 0) merge(result, await writeFile(targetDir, "CLAUDE.md", content, true));
+      const composed = await composeClaudeMd(projectType, isAdd ? mergedRefs : refs);
+      const blocks = await sectionBlocks(refs);
+      for (const fname of instrFiles) {
+        const existing = isAdd ? await readIfExists(resolve(targetDir, fname)) : null;
+        if (existing === null) {
+          if (composed) merge(result, await writeFile(targetDir, fname, composed, overwrite));
+        } else {
+          const { content, added } = appendBlocks(existing, blocks, "\n\n");
+          if (added.length > 0) merge(result, await writeFile(targetDir, fname, content, true));
+        }
       }
     }
 
@@ -392,7 +412,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
       if (existing === null) {
         const compose = await composeDockerCompose(dockerBaseId, isAdd ? mergedRefs : refs);
         if (compose) merge(result, await writeFile(targetDir, "docker-compose.yml", compose, overwrite));
-        merge(result, await copy("docker", dockerBaseId, targetDir, overwrite));
+        merge(result, await copy("docker", dockerBaseId, targetDir, overwrite, selectedTools));
       } else {
         const blocks = await fragmentBlocks(refs, "compose.service.yml");
         const { content, added } = appendBlocks(existing, blocks);
@@ -400,11 +420,11 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
       }
     }
 
-    if (projectType) merge(result, await copy("project-type", projectType, targetDir, overwrite));
-    for (const id of selectedStacks) merge(result, await copy("stack", id, targetDir, overwrite));
-    for (const id of selectedDatabases) merge(result, await copy("database", id, targetDir, overwrite));
-    for (const id of selectedStorage) merge(result, await copy("storage", id, targetDir, overwrite));
-    for (const id of selectedAuth) merge(result, await copy("auth", id, targetDir, overwrite));
+    if (projectType) merge(result, await copy("project-type", projectType, targetDir, overwrite, selectedTools));
+    for (const id of selectedStacks) merge(result, await copy("stack", id, targetDir, overwrite, selectedTools));
+    for (const id of selectedDatabases) merge(result, await copy("database", id, targetDir, overwrite, selectedTools));
+    for (const id of selectedStorage) merge(result, await copy("storage", id, targetDir, overwrite, selectedTools));
+    for (const id of selectedAuth) merge(result, await copy("auth", id, targetDir, overwrite, selectedTools));
 
     // CI: append new-stack jobs to already-installed providers; compose fresh
     // (from the merged stack set) for newly selected providers.
@@ -426,15 +446,23 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
       if (composed) {
         merge(result, await writeFile(targetDir, composed.path, composed.contents, overwrite));
       } else {
-        merge(result, await copy("ci", id, targetDir, overwrite));
+        merge(result, await copy("ci", id, targetDir, overwrite, selectedTools));
       }
     }
 
-    for (const id of selectedDocs) merge(result, await copy("docs", id, targetDir, overwrite));
+    for (const id of selectedDocs) merge(result, await copy("docs", id, targetDir, overwrite, selectedTools));
     const skillsToInstall = unionStr(core.skills, selectedSkills);
     const agentsToInstall = unionStr(core.agents, selectedAgents);
-    for (const id of skillsToInstall) merge(result, await copy("skill", id, targetDir, overwrite));
-    for (const id of agentsToInstall) merge(result, await copy("agent", id, targetDir, overwrite));
+    for (const id of skillsToInstall) merge(result, await copy("skill", id, targetDir, overwrite, selectedTools));
+    for (const id of agentsToInstall) merge(result, await copy("agent", id, targetDir, overwrite, selectedTools));
+
+    // opencode.json marks the project as OpenCode-aware (points at AGENTS.md).
+    if (selectedTools.includes("opencode")) {
+      const existing = isAdd ? await readIfExists(resolve(targetDir, "opencode.json")) : null;
+      if (existing === null) {
+        merge(result, await writeFile(targetDir, "opencode.json", opencodeConfig(), overwrite));
+      }
+    }
     build.stop(`Wrote ${result.written.length} file(s).`);
   } catch (err) {
     build.stop(pc.red("Scaffolding failed."));
@@ -470,12 +498,13 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   }
 
   // 8. Record project state so future runs (and Claude) know what's set up.
-  const installedAgents = unionStr(selectedAgents, namesUnder(result.written, "agents", ".md"));
-  const installedSkills = unionStr(selectedSkills, namesUnder(result.written, "skills"));
+  const installedAgents = unionStr(selectedAgents, installedNames(result.written, "agents"));
+  const installedSkills = unionStr(selectedSkills, installedNames(result.written, "skills"));
   await writeManifest(
     targetDir,
     {
       projectType,
+      tools: selectedTools,
       stacks: selectedStacks,
       apps: [],
       databases: selectedDatabases,
@@ -554,20 +583,10 @@ export async function mergePkgFragments(
   return next === prev ? null : next;
 }
 
-/** Extract the names installed under `.claude/<sub>/` from written paths. */
-function namesUnder(paths: string[], sub: string, stripExt = ""): string[] {
-  const out = new Set<string>();
-  const re = new RegExp(`\\.claude/${sub}/([^/]+)`);
-  for (const path of paths) {
-    const m = path.replace(/\\/g, "/").match(re);
-    if (m) out.add(stripExt ? m[1].replace(new RegExp(`\\${stripExt}$`), "") : m[1]);
-  }
-  return [...out];
-}
-
 interface MonorepoContext {
   targetDir: string;
   mode: "new" | "existing";
+  tools: ToolId[];
   stacks: Option[];
   databases: Option[];
   storage: Option[];
@@ -750,6 +769,7 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
       targetDir,
       {
         projectName: basename(targetDir),
+        tools: ctx.tools,
         apps,
         sectionRefs,
         auth: selectedAuth,
@@ -765,16 +785,19 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
     );
 
     if (isAdd) {
-      // CLAUDE.md: append app sections + new workspace sections.
+      // Instructions file(s): append app sections + new workspace sections, or
+      // compose fresh for a newly selected tool's file (CLAUDE.md / AGENTS.md).
       if (includeClaudeMd) {
-        const existing = await readIfExists(resolve(targetDir, "CLAUDE.md"));
-        if (existing === null) {
-          const md = await composeMonorepoClaudeMd(mergedApps, mergedRefs);
-          if (md) merge(result, await writeFile(targetDir, "CLAUDE.md", md, true));
-        } else {
-          const blocks = [...(await appSectionBlocks(apps)), ...(await sectionBlocks(sectionRefs))];
-          const { content, added } = appendBlocks(existing, blocks, "\n\n");
-          if (added.length > 0) merge(result, await writeFile(targetDir, "CLAUDE.md", content, true));
+        const blocks = [...(await appSectionBlocks(apps)), ...(await sectionBlocks(sectionRefs))];
+        for (const fname of instructionFiles(ctx.tools)) {
+          const existing = await readIfExists(resolve(targetDir, fname));
+          if (existing === null) {
+            const md = await composeMonorepoClaudeMd(mergedApps, mergedRefs);
+            if (md) merge(result, await writeFile(targetDir, fname, md, true));
+          } else {
+            const { content, added } = appendBlocks(existing, blocks, "\n\n");
+            if (added.length > 0) merge(result, await writeFile(targetDir, fname, content, true));
+          }
         }
       }
 
@@ -784,7 +807,7 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
         if (existing === null) {
           const compose = await composeMonorepoDockerCompose(ctx.dockerBaseId, mergedApps, mergedRefs);
           if (compose) merge(result, await writeFile(targetDir, compose.path, compose.contents, true));
-          merge(result, await copy("docker", ctx.dockerBaseId, targetDir, false));
+          merge(result, await copy("docker", ctx.dockerBaseId, targetDir, false, ctx.tools));
         } else {
           const ports = usedHostPorts(existing);
           const blocks: Block[] = [];
@@ -839,6 +862,7 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
     targetDir,
     {
       projectType: "monorepo",
+      tools: ctx.tools,
       stacks: [...new Set(apps.map((a) => a.stack))],
       apps,
       databases: selectedDatabases,
@@ -847,8 +871,8 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
       ci: selectedCi,
       docker: wantDocker,
       docs: selectedDocs,
-      skills: unionStr(selectedSkills, namesUnder(result.written, "skills")),
-      agents: unionStr(selectedAgents, namesUnder(result.written, "agents", ".md")),
+      skills: unionStr(selectedSkills, installedNames(result.written, "skills")),
+      agents: unionStr(selectedAgents, installedNames(result.written, "agents")),
     },
     VERSION,
     new Date().toISOString(),
@@ -856,6 +880,18 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
   p.log.info(`Recorded project state in ${MANIFEST_FILE}`);
 
   p.outro(pc.green(`Done! monorepo ready at ${targetDir} (${apps.length} app(s))`));
+}
+
+/** Ask which agentic coding tool(s) to target (pre-selects existing choices). */
+async function pickTools(existing?: ToolId[]): Promise<ToolId[] | null> {
+  const res = await p.multiselect({
+    message: "Which agentic coding tool(s) will you use?",
+    options: AGENTIC_TOOLS.map((t) => ({ value: t.id, label: t.label, hint: t.hint })),
+    initialValues: existing && existing.length > 0 ? existing : ["claude-code"],
+    required: true,
+  });
+  if (p.isCancel(res)) return null;
+  return normalizeTools(res as string[]);
 }
 
 async function pickMany(
@@ -887,9 +923,10 @@ async function copy(
   id: string,
   targetDir: string,
   overwrite: boolean,
+  tools: ToolId[],
 ): Promise<WriteResult> {
   const files = await fetchTemplate(kind, id);
-  return writeTemplateFiles(targetDir, files, { overwrite });
+  return writeTemplateFiles(targetDir, retargetForTools(files, tools), { overwrite });
 }
 
 function merge(into: WriteResult, from: WriteResult): void {

@@ -154,9 +154,19 @@ A **CLI tool** (`create-ai-native-project`) that helps users make a project
 - **Agents** — custom subagents copied into `.claude/agents/`.
 - **CLAUDE.md** — *composed* from the project type (base) + each stack (sections).
 
-**Interactive flow:** target (new/existing/`--boot`) → project type (single) →
+**Interactive flow:** target (new/existing/`--boot`) → **agentic coding tool(s)
+(Claude Code / Codex / OpenCode)** → project type (single) →
 tech stack(s) → database(s) → storage → auth → skills → agents → CI? →
 docs folder? (Docusaurus) → Docker? → generate → optional dependency install.
+
+**Multi-tool output:** the same registry source (Claude-Code-shaped) is
+retargeted per selected tool (`lib/tools.ts`): instructions → `CLAUDE.md`
+(Claude Code) and/or `AGENTS.md` (Codex/OpenCode, identical content); skills →
+`.claude/skills/` (Claude Code; OpenCode reads it natively) and/or
+`.agents/skills/` (Codex) — same `SKILL.md`; subagents → `.claude/agents/*.md`,
+`.opencode/agents/*.md` (translated frontmatter: no `name`, `mode: subagent`,
+`permission.edit: deny` for read-only), and `.codex/agents/*.toml` (`name` /
+`description` / `developer_instructions`). OpenCode also gets an `opencode.json`.
 
 Beyond CLAUDE.md + `.claude/`, it composes a runnable **package.json** (project
 type base + stack deps/scripts), an optional **docker-compose.yml** (services
@@ -217,6 +227,10 @@ Claude) stay aware of what's set up and skip inapplicable actions.
 | 2026-07-10 | **Add-later runs append/merge composed files** (new `lib/augment.ts`): CLAUDE.md sections, compose services (port-aware), CI jobs appended idempotently (skip if header line present); package.json deep-merged existing-wins | Re-runs actually extend the project without clobbering user edits |
 | 2026-07-10 | **Pickers filter installed options** from the manifest (stacks kept for monorepos); duplicate app names blocked | No redundant choices; no accidental app collisions |
 | 2026-07-10 | **Quality baseline:** vitest unit tests (28), `.gitlab-ci.yml` (typecheck+build+test), README, MIT LICENSE, publish metadata + `prepublishOnly`; version single-sourced from package.json (`lib/version.ts`), bumped to 0.2.0; engines `>=20.12` (`process.loadEnvFile`) | Dogfood our own engineering standards |
+| 2026-07-11 | **Multi-tool support:** new multiselect "which agentic coding tool(s)" (Claude Code / Codex / OpenCode); one Claude-shaped registry source is **retargeted/translated** at generation time (`lib/tools.ts`) rather than duplicated in the registry | Single source of truth; add a tool = one CLI module, no registry fork |
+| 2026-07-11 | **Instructions file per tool:** `CLAUDE.md` (Claude Code) + `AGENTS.md` (Codex/OpenCode), identical content, both appended-to on re-runs | AGENTS.md is the cross-tool standard; adding a tool later creates its file from the merged state |
+| 2026-07-11 | **Agent translation is lossy-but-safe:** OpenCode/Codex agents drop `model` (inherit workspace default, avoids stale ids) and don't carry fine-grained tool allowlists — only read-only intent is preserved (`permission.edit: deny` when the Claude agent lists no write tool) | Faithful, valid, future-proof output over brittle 1:1 mapping |
+| 2026-07-11 | **Skills need no translation:** `SKILL.md` is identical across tools — pure file placement (`.claude/skills` shared by Claude Code + OpenCode; `.agents/skills` for Codex) | OpenCode reads `.claude/skills` natively; avoid redundant copies |
 
 ### 9.3 Registry (template source)
 The CLI reads skills, agents, and the CLAUDE.md template from a **git repo**,
@@ -283,6 +297,7 @@ src/
     monorepo.ts       # scaffold monorepo: apps under apps/<group>/<app>, agents→root, per-app package.json, per-app docker/CI
     augment.ts        # add-later helpers: append blocks idempotently, read-if-exists, used host ports
     names.ts          # slugSegment
+    tools.ts          # agentic tool targets: retarget/translate .claude/{agents,skills} → per-tool layouts (claude-code/codex/opencode), instruction filenames, opencode.json
     version.ts        # VERSION read from package.json at runtime
 test/                 # vitest unit tests (augment, pkgjson, manifest, files, transforms, names)
 .gitlab-ci.yml        # repo CI: npm ci → typecheck → build → test
@@ -323,3 +338,4 @@ tsconfig.json         # strict TS, Bundler resolution
 - 2026-07-10 — **Hardening + real "add later"** (v0.2.0, branch `feat/hardening-and-add-later`): full-project review produced 9 tracked tasks, all done. (1) Add-later runs now actually update composed files — new `lib/augment.ts` appends CLAUDE.md sections / compose services (port-aware vs the existing file) / CI jobs idempotently, and deep-merges `package.json` existing-wins; pickers filter installed options from the manifest; monorepo blocks duplicate app names and appends per-app service+job+section. (2) Bug fixes: engines `>=20.12` (`process.loadEnvFile` silently failed on Node 18–20.11), `--boot` into an existing project no longer overwrites, monorepo docker extras (`.dockerignore`) now copied, version single-sourced from package.json. (3) Quality: 28 vitest unit tests, repo `.gitlab-ci.yml`, README, MIT LICENSE, publish metadata. Registry: fixed `node-nest` test script (jest w/o dep) + `react` build script (`tsc --noEmit`); skill updated to describe append-on-add. Verified end-to-end: fresh single, add-stack-to-single (deps merged, sections/services/jobs appended, idempotent), fresh monorepo, add-app-to-monorepo (port 3002 auto-assigned, per-app job appended) — all YAML/JSON valid; typecheck+build+tests pass.
 - 2026-07-11 — **Moved the CLI repo to GitHub** (`https://github.com/GeekyAnts/create-ai-native-project`, public). All feature branches were already merged into `main` (0 ahead) and there were no tags, so pushing `main` moved the full history. Made GitHub the new `origin`; kept the old GitLab remote as `gitlab` (backup). Updated `package.json` (`repository`/`homepage` → GitHub, added `bugs`) and the §9 project table. **Registry repo (`geekyants/claude-registry`) stays on `git.geekyants.com`** — unchanged; `.env.example`, `src/lib/templates.ts` default, and README registry URL still point there intentionally.
 - 2026-07-11 — **Moved + renamed the registry to GitHub** (`https://github.com/GeekyAnts/agentic-coding-registry`, public; renamed from `claude-registry`). Supersedes the "registry stays on GitLab" note above. Mirror-cloned from GitLab (only `main`, no tags) and pushed to the new repo. Repointed the CLI's default `REGISTRY_URL` (`src/lib/templates.ts`) from the SSH GitLab URL to the **HTTPS** GitHub URL (public repo → anonymous clone, no SSH key needed); updated `.env`, `.env.example`, and README. Also hardened `pull()` (in `templates.ts`) to `git remote set-url origin <REGISTRY_URL>` before fetch, so `update` realigns any pre-existing cache clone with the new/configured URL instead of silently pulling from the old origin. Version bump handled in the same PR.
+- 2026-07-11 — **Multi-tool support: Codex + OpenCode** (branch `feat/multi-tool-support`, v0.3.0). Researched the exact current formats for both tools (OpenCode `opencode.ai/docs`; Codex `learn.chatgpt.com/docs` + `agents.md`). New `lib/tools.ts` retargets/translates the single Claude-shaped registry source per selected tool: instructions → `CLAUDE.md` and/or `AGENTS.md`; skills → `.claude/skills` (Claude Code + OpenCode-native) / `.agents/skills` (Codex), same `SKILL.md`; subagents → `.claude/agents/*.md` / `.opencode/agents/*.md` (frontmatter translated: drop `name`, `mode: subagent`, `permission.edit: deny` for read-only) / `.codex/agents/*.toml` (`name`/`description`/`developer_instructions`); OpenCode also gets `opencode.json`. New multiselect prompt threaded through single + monorepo flows; `copy()` retargets so **stack-bundled** agents convert too; manifest gained `tools` (backward-compat default `["claude-code"]`). 18 new unit tests (46 total). Verified end-to-end against the live registry with all three tools selected: CLAUDE.md===AGENTS.md, core + stack agents present in all three layouts, skills placed correctly (no redundant `.opencode/skills`), OpenCode frontmatter + Codex TOML well-formed, `opencode.json` valid, manifest records all tools. **Follow-ups:** (1) base CLAUDE.md/AGENTS.md wording is still Claude-centric (mentions `.claude/…`); a registry pass could make the shared instruction text tool-neutral. (2) *Adding a tool to an existing project later* regenerates its instructions file, `opencode.json`, and **core** agents, and skills already work (OpenCode reads `.claude/skills` natively) — but **stack-bundled specialist agents aren't re-retargeted** to the new tool (installed stacks are filtered from the picker, so their stack isn't re-copied). Choosing all tools at creation time gives full coverage; re-adding the stack would too.
