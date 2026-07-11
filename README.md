@@ -98,6 +98,15 @@ npm run build      # tsup → dist/
 Requires Node **≥ 20.12**. See `CLAUDE.md` for the full project knowledge base
 and the template registry's README for how to contribute templates.
 
+## Built by GeekyAnts
+
+`create-ai-native-project` is built and maintained by **[GeekyAnts](https://geekyants.com)**,
+a product engineering studio trusted by WeWork, SKF, and Darden.
+
+Shipping an AI-native product and need a team that moves fast? We do
+**[AI-powered product engineering](https://geekyants.com/ai-powered-product-engineering)** —
+[hire dedicated engineers or talk to us about consulting →](https://geekyants.com/ai-powered-product-engineering)
+
 ## License
 
 [MIT](./LICENSE) © GeekyAnts Inc
