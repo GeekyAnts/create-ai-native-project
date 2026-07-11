@@ -1,7 +1,7 @@
 {
   "name": "create-ai-native-project",
-  "version": "0.3.1",
-  "description": "Interactive CLI to scaffold AI-native projects with CLAUDE.md, skills, and agents",
+  "version": "0.3.2",
+  "description": "Interactive CLI to scaffold AI-native projects for Claude Code, OpenAI Codex, and OpenCode — instructions, skills, agents, stacks, Docker, and CI",
   "type": "module",
   "bin": {
     "create-ai-native-project": "./dist/index.js"
@@ -18,11 +18,17 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "start": "node dist/index.js",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "keywords": [
     "claude",
     "claude-code",
+    "codex",
+    "opencode",
+    "agents.md",
     "cli",
     "scaffold",
     "skills",
@@ -48,6 +54,7 @@
     "tsup": "^8.3.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
+    "vitepress": "^1.6.4",
     "vitest": "^4.1.10"
   }
 }
