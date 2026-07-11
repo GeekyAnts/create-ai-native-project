@@ -38,3 +38,9 @@ features:
     link: /guide/extending
     linkText: Extending a project
 ---
+
+---
+
+> **Built by [GeekyAnts](https://geekyants.com).** Need to ship an AI-native product faster?
+> Explore **[AI-powered product engineering](https://geekyants.com/ai-powered-product-engineering)** —
+> dedicated engineers and consulting.
