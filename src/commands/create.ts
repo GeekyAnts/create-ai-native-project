@@ -17,6 +17,7 @@ import {
   readTemplateFile,
   fetchTemplate,
   type CoreSet,
+  type TemplateFile,
   type TemplateMeta,
   type TemplateRef,
 } from "../lib/templates.js";
@@ -140,9 +141,14 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   }
 
   // Which agentic coding tool(s) this project targets — drives which
-  // instruction file(s) and agent/skill layouts get generated.
-  const selectedTools = await pickTools(existingManifest?.tools);
-  if (selectedTools === null) return p.cancel("Cancelled.");
+  // instruction file(s) and agent/skill layouts get generated. Tools are
+  // additive (the manifest never drops one), so the effective set is the union
+  // of what's already recorded and what was just picked.
+  const pickedTools = await pickTools(existingManifest?.tools);
+  if (pickedTools === null) return p.cancel("Cancelled.");
+  const priorTools = existingManifest?.tools ?? [];
+  const selectedTools = normalizeTools([...priorTools, ...pickedTools]);
+  const newTools = selectedTools.filter((t) => !priorTools.includes(t));
 
   // 2. Load everything the registry offers.
   const spin = p.spinner();
@@ -462,6 +468,21 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
       if (existing === null) {
         merge(result, await writeFile(targetDir, "opencode.json", opencodeConfig(), overwrite));
       }
+    }
+
+    // Adding a tool to an existing project: backfill that tool's agent/skill
+    // layouts for pieces already installed (stack-bundled + standalone agents,
+    // skills) that this run wouldn't otherwise re-copy.
+    if (isAdd && newTools.length > 0) {
+      merge(result, await materializeInstalledForTools(
+        targetDir,
+        {
+          stacks: existingManifest?.stacks ?? [],
+          agents: existingManifest?.agents ?? [],
+          skills: existingManifest?.skills ?? [],
+        },
+        selectedTools,
+      ));
     }
     build.stop(`Wrote ${result.written.length} file(s).`);
   } catch (err) {
@@ -843,6 +864,22 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
         const composed = await composeMonorepoCi(providerId, mergedApps);
         if (composed) merge(result, await writeFile(targetDir, composed.path, composed.contents, false));
       }
+
+      // Adding a tool later: backfill its agent/skill layouts for the apps'
+      // stacks + workspace agents/skills already installed.
+      const priorTools = ctx.existingManifest?.tools ?? [];
+      const newTools = ctx.tools.filter((t) => !priorTools.includes(t));
+      if (newTools.length > 0) {
+        merge(result, await materializeInstalledForTools(
+          targetDir,
+          {
+            stacks: ctx.existingManifest?.stacks ?? [],
+            agents: ctx.existingManifest?.agents ?? [],
+            skills: ctx.existingManifest?.skills ?? [],
+          },
+          ctx.tools,
+        ));
+      }
     }
     build.stop(`Wrote ${result.written.length} file(s) across ${apps.length} app(s).`);
   } catch (err) {
@@ -927,6 +964,58 @@ async function copy(
 ): Promise<WriteResult> {
   const files = await fetchTemplate(kind, id);
   return writeTemplateFiles(targetDir, retargetForTools(files, tools), { overwrite });
+}
+
+/**
+ * Backfill agent/skill layouts for the given tools across pieces already
+ * installed in a project, without touching existing files. Used when a tool is
+ * added to an existing project so its `.opencode/agents`, `.codex/agents`, and
+ * `.agents/skills` (etc.) get created for stacks/agents/skills installed earlier.
+ *
+ * The FULL effective tool set is passed (not just the new ones): `retargetForTools`
+ * picks the idiomatic destinations for the whole set, and `overwrite: false`
+ * means only the missing (newly-needed) per-tool files are actually written.
+ */
+export async function materializeInstalledForTools(
+  targetDir: string,
+  installed: { stacks: string[]; agents: string[]; skills: string[] },
+  tools: ToolId[],
+): Promise<WriteResult> {
+  const result: WriteResult = { written: [], skipped: [] };
+  const write = async (files: TemplateFile[]): Promise<void> => {
+    if (files.length === 0) return;
+    merge(result, await writeTemplateFiles(targetDir, retargetForTools(files, tools), { overwrite: false }));
+  };
+
+  // Standalone agents that exist as registry `agents/` templates. (Stack-bundled
+  // agent names like `react` aren't here — they come in via their stack below.)
+  const registryAgents = new Set((await listAgents()).map((m) => m.id));
+  for (const id of installed.agents) {
+    if (!registryAgents.has(id)) continue;
+    try {
+      await write(await fetchTemplate("agent", id));
+    } catch {
+      /* template no longer in registry — skip */
+    }
+  }
+  // Stack-bundled agents/skills (the `.claude/` portion of each installed stack).
+  for (const id of installed.stacks) {
+    try {
+      const files = (await fetchTemplate("stack", id)).filter((f) => f.path.startsWith(".claude/"));
+      await write(files);
+    } catch {
+      /* skip */
+    }
+  }
+  // Skills (identical SKILL.md placed into each tool's skill dir).
+  for (const id of installed.skills) {
+    try {
+      await write(await fetchTemplate("skill", id));
+    } catch {
+      /* skip */
+    }
+  }
+  return result;
 }
 
 function merge(into: WriteResult, from: WriteResult): void {
