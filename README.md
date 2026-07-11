@@ -74,7 +74,7 @@ Templates come from a git registry, cloned to
 
 | Env var | Default | Purpose |
 | --- | --- | --- |
-| `CLAUDE_SETUP_REGISTRY` | `git@git.geekyants.com:geekyants/claude-registry.git` | Registry repo URL |
+| `CLAUDE_SETUP_REGISTRY` | `https://github.com/GeekyAnts/agentic-coding-registry.git` | Registry repo URL |
 | `CLAUDE_SETUP_REGISTRY_REF` | `main` | Branch/ref to use |
 
 Set them in a `.env` in your working directory (see `.env.example`).
