@@ -34,13 +34,17 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
-      # OIDC Trusted Publishing requires npm >= 11.5.1 (Node 22 ships npm 10.x).
-      # Pin to npm 11 — npm@latest is now 12, which needs Node >= 22.22/24.15.
+      # OIDC Trusted Publishing requires npm >= 11.5.1. Node 24 ships npm 11.x;
+      # pin the latest 11.x to be sure (npm@latest is 12 with stricter engines).
+      # Print versions so the log confirms which npm actually runs the publish.
       - name: Upgrade npm
-        run: npm install -g npm@11
+        run: |
+          npm install -g npm@11
+          node --version
+          npm --version
 
       - name: Install dependencies
         run: npm ci
