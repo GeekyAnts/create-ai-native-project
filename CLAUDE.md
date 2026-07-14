@@ -27,7 +27,7 @@
 | Description     | Canonical reference for company facts, services, and stack   |
 | Version         | 1.0.0                                                        |
 | Status          | Active                                                        |
-| Last Updated    | 2026-07-10                                                   |
+| Last Updated    | 2026-07-14                                                   |
 | Maintainer      | pratik@geekyants.work                                        |
 | Provenance      | Compiled from official GeekyAnts public sources              |
 | License         | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)    |
@@ -155,31 +155,39 @@ A **CLI tool** (`create-ai-native-project`) that helps users make a project
 - **CLAUDE.md** — *composed* from the project type (base) + each stack (sections).
 
 **Interactive flow:** target (new/existing/`--boot`) → **agentic coding tool(s)
-(Claude Code / Codex / OpenCode)** → project type (single) →
-tech stack(s) → database(s) → storage → auth → skills → agents → CI? →
-docs folder? (Docusaurus) → Docker? → generate → optional dependency install.
+(Claude Code / Codex / OpenCode / Cline)** → project type (single) →
+tech stack(s) → database(s) → vector-db → ORM → storage → auth → IaC → skills →
+agents → CI? → docs folder? → Docker? → generate → optional dependency install.
 
 **Multi-tool output:** the same registry source (Claude-Code-shaped) is
 retargeted per selected tool (`lib/tools.ts`): instructions → `CLAUDE.md`
-(Claude Code) and/or `AGENTS.md` (Codex/OpenCode, identical content); skills →
+(Claude Code) and/or `AGENTS.md` (Codex/OpenCode/Cline, identical content); skills →
 `.claude/skills/` (Claude Code; OpenCode reads it natively) and/or
-`.agents/skills/` (Codex) — same `SKILL.md`; subagents → `.claude/agents/*.md`,
+`.agents/skills/` (Codex) and/or `.clinerules/workflows/<n>.md` (Cline, as slash
+commands) — same `SKILL.md`; subagents → `.claude/agents/*.md`,
 `.opencode/agents/*.md` (translated frontmatter: no `name`, `mode: subagent`,
 `permission.edit: deny` for read-only), and `.codex/agents/*.toml` (`name` /
-`description` / `developer_instructions`). OpenCode also gets an `opencode.json`.
+`description` / `developer_instructions`). Cline has no per-file subagent format,
+so subagents aren't emitted for it. OpenCode also gets an `opencode.json`.
 
 Beyond CLAUDE.md + `.claude/`, it composes a runnable **package.json** (project
-type base + stack deps/scripts), an optional **docker-compose.yml** (services
-from the chosen stacks/databases/storage, `build: .` against per-stack
-Dockerfiles), CI config, auth setup, and a **docs/** site (Docusaurus). Stacks
-include React, Next.js, React Native, Flutter, NestJS, Laravel, Python FastAPI, and
-Python Streamlit (each with runnable boilerplate + a Dockerfile); databases
-(Postgres/MySQL/MongoDB), storage (MinIO/AWS S3), and auth (JWT/Clerk) contribute
-CLAUDE.md sections; CI (GitHub Actions / GitLab CI) is **composed per selected
-stack** (one job per stack). Each
-stack also **auto-installs a specialist agent** (`.claude/agents/<stack>.md`), and
-every project records its state in **`.ai-native-project.json`** so re-runs (and
-Claude) stay aware of what's set up and skip inapplicable actions.
+type base + stack deps/scripts + ORM deps), an optional **docker-compose.yml**
+(services from the chosen stacks/databases/vector-db/storage, `build: .` against
+per-stack Dockerfiles), CI config, auth setup, IaC scaffolds, and a **docs/**
+site. Stacks now span web (React, Next.js, Vue, Svelte, SvelteKit, Astro, Nuxt,
+Angular), backend (NestJS, Hono, Laravel, Python FastAPI, Django, Spring Boot,
+ASP.NET Core), mobile/desktop (React Native/Expo, Flutter, Tauri), data apps
+(Python Streamlit), and **AI-native** (MCP servers TS+Py, Vercel AI SDK,
+LangGraph, PydanticAI) — each with runnable boilerplate or a documented starter
++ a Dockerfile. Databases (Postgres/MySQL/MongoDB/Valkey/Neon/Supabase),
+**vector-db** (pgvector/Qdrant/Chroma), **ORM** (Prisma/Drizzle), storage
+(SeaweedFS/Cloudflare R2/AWS S3), auth (JWT/Clerk/Better Auth/Auth.js), and
+**IaC** (OpenTofu) contribute CLAUDE.md sections and/or compose services; CI
+(GitHub Actions / GitLab CI) is **composed per selected stack** (one job per
+stack). Each stack also **auto-installs a specialist agent**
+(`.claude/agents/<stack>.md`), and every project records its state in
+**`.ai-native-project.json`** so re-runs (and Claude) stay aware of what's set
+up and skip inapplicable actions.
 
 **Distribution & usage:**
 - Installed via npm; invocable as `npm create ai-native-project` / `create-ai-native-project`.
@@ -256,20 +264,37 @@ shallow-cloned/updated into a local cache (`~/.cache/create-ai-native-project/re
   claude/<id>/         → base CLAUDE.md fallback (e.g. claude/default/CLAUDE.md)
   ```
   **Composed (not copied verbatim):** `template.json` (all kinds);
-  `CLAUDE.section.md` + `compose.service.yml` (project-type/stack/database/storage/auth);
-  `CLAUDE.md` + `package.json` (project-type/stack); `docker-compose.yml` (docker).
+  `CLAUDE.section.md` + `compose.service.yml` (project-type/stack/database/vector-db/storage/auth/iac);
+  `CLAUDE.md` + `package.json` (project-type/stack; `package.json` also for `orm`);
+  `docker-compose.yml` (docker).
   Everything else is copied — so a `docs/` template keeps its own `package.json`,
   and `requirements.txt` / Dockerfiles / CI files drop in as setup files.
-- **Status:** ✅ seeded (branch `main`):
+- **Kinds:** project-type, stack, database, **vector-db**, **orm**, storage,
+  auth, **iac**, docker, ci, docs, skill, agent, claude. (`vector-db`/`orm`/`iac`
+  added in the v1 roadmap — see the 2026-07-14 note in §9.5.)
+- **Status:** ✅ seeded (branch `main`), grown substantially in the v1 roadmap:
   - project-types: `single`, `monorepo` (monorepo has a `package.json` base)
-  - stacks (each: runnable boilerplate + Dockerfile + bundled `.claude/agents/<stack>.md`
-    + per-provider CI job fragments): `react`, `nextjs`, `node-nest`, `python-fastapi`,
-    `python-streamlit` complete; `laravel`, `flutter`, `react-native` are starters
-    (full skeleton via their official CLIs).
-  - databases: `postgres`, `mysql`, `mongodb` · storage: `minio`, `aws-s3`
-  - auth: `jwt`, `clerk` · ci: `github-actions`, `gitlab-ci`
-  - docker: `compose` base · docs: `docusaurus`
-  - skills: `knowledge-base` · agents: `code-reviewer` · `claude/default` fallback
+  - stacks — web: `react`, `nextjs`, `vue`, `svelte`, `sveltekit`, `astro`,
+    `nuxt`, `angular`; backend: `node-nest`, `hono`, `laravel`, `python-fastapi`,
+    `django`, `spring-boot`, `aspnet`; mobile/desktop: `react-native` (Expo SDK 57),
+    `flutter`, `tauri`; data: `python-streamlit`; AI-native: `mcp-server`,
+    `mcp-server-py`, `vercel-ai-sdk`, `langgraph`, `pydantic-ai`. Each ships a
+    Dockerfile (where applicable), a bundled `.claude/agents/<stack>.md`, and
+    per-provider CI job fragments; several are documented starters (Angular,
+    Laravel, Flutter, Spring Boot, ASP.NET, Tauri) scaffolded via official CLIs.
+  - databases: `postgres`, `mysql`, `mongodb`, `valkey`, `neon`, `supabase`
+  - vector-db: `pgvector` (default), `qdrant`, `chroma`
+  - orm: `prisma`, `drizzle` · storage: `seaweedfs` (self-host default),
+    `cloudflare-r2`, `aws-s3` (MinIO removed — AGPL/license risk)
+  - auth: `jwt`, `clerk`, `better-auth`, `authjs` · iac: `opentofu`
+  - ci: `github-actions`, `gitlab-ci` · docker: `compose` base
+  - docs: `docusaurus`, `fumadocs`, `starlight`
+  - skills (core + batch 1): `knowledge-base`, `engineering-standards`,
+    `using-create-ai-native-project`, `test-generation`, `debugging`,
+    `pr-description`, `refactoring`, `performance-profiling`, `dependency-upgrade`
+  - agents (core + batch 1): `code-reviewer`, `security-reviewer`,
+    `test-engineer`, `api-designer`, `database-optimizer`, `performance-engineer`,
+    `devops-engineer`, `docs-writer`, `accessibility-auditor` · `claude/default` fallback
   - Verified end-to-end (single + node-nest + postgres + jwt + github-actions +
     docker): composed CLAUDE.md (all sections), full NestJS boilerplate, root
     Dockerfile, `.github/workflows/ci.yml`, and a `docker-compose.yml` using
@@ -291,14 +316,14 @@ src/
     update.ts         # refresh the registry cache
   lib/
     templates.ts      # git registry: clone/pull + list/fetch + read; kind-aware compose exclusion
-    claudemd.ts       # compose CLAUDE.md (base + section refs: stack/database/storage)
-    pkgjson.ts        # compose package.json (project-type base + stack fragments, first-wins)
+    claudemd.ts       # compose CLAUDE.md (base + section refs: stack/database/vector-db/storage/auth/iac)
+    pkgjson.ts        # compose package.json (project-type base + stack + orm fragments, first-wins)
     compose.ts        # compose docker-compose.yml (base + compose.service.yml fragments)
     ci.ts             # compose CI pipeline (provider base + per-stack ci.<provider>.yml)
     monorepo.ts       # scaffold monorepo: apps under apps/<group>/<app>, agents→root, per-app package.json, per-app docker/CI
     augment.ts        # add-later helpers: append blocks idempotently, read-if-exists, used host ports
     names.ts          # slugSegment
-    tools.ts          # agentic tool targets: retarget/translate .claude/{agents,skills} → per-tool layouts (claude-code/codex/opencode), instruction filenames, opencode.json
+    tools.ts          # agentic tool targets: retarget/translate .claude/{agents,skills} → per-tool layouts (claude-code/codex/opencode/cline), instruction filenames, opencode.json
     version.ts        # VERSION read from package.json at runtime
 test/                 # vitest unit tests (augment, pkgjson, manifest, files, transforms, names)
 .gitlab-ci.yml        # repo CI: npm ci → typecheck → build → test
@@ -347,3 +372,16 @@ tsconfig.json         # strict TS, Bundler resolution
 - 2026-07-11 — **Published `create-ai-native-project@0.3.2` to npm** (public, owner `kumarpratik`; 2FA OTP entered interactively). Verified live (`latest = 0.3.2`, `bin` intact, `npx create-ai-native-project@0.3.2 --version/--help` runs). Tagged `v0.3.2` as a **plain git tag** (not a GitHub Release — avoids triggering the release-publish workflow against an already-published version). Then set up **npm Trusted Publishing (OIDC)**: added a gated GitHub Actions **environment `release`** to the `publish` job (name must match the npm Trusted Publisher config exactly — OIDC matches the environment claim). With Trusted Publishing configured, CI can publish tokenlessly (the `NODE_AUTH_TOKEN`/`NPM_TOKEN` env can later be dropped from the publish step). **Known nit:** the CLI `--help` description string in `src/index.ts` still reads "…with CLAUDE.md, skills, and agents" (pre-multi-tool) — the npm/package.json description is current; fold the one-liner into the next release.
 - 2026-07-11 — **v0.3.3 + Trusted Publishing test** (branch `ci/test-trusted-publishing`). Fixed the `src/index.ts` `--help` description → multi-tool text (resolves the nit above). Hardened `publish.yml` for **OIDC Trusted Publishing**: added `npm install -g npm@latest` (OIDC needs npm ≥ 11.5.1; Node 20 ships npm 10) and **removed** the `NODE_AUTH_TOKEN`/`NPM_TOKEN` env (auth is now tokenless via OIDC + `id-token: write` + the `release` environment). Bumped 0.3.2 → 0.3.3; cutting GitHub Release `v0.3.3` triggers the workflow to publish tokenlessly with provenance — the real end-to-end test of the Trusted Publisher setup.
 - 2026-07-11 — **Trusted Publishing works; `0.3.3` published via OIDC.** Debugging the CI publish surfaced a chain of issues (all fixed in `publish.yml`): (1) `npm@latest` is npm 12 needing Node ≥22.22/24.15 → run on **Node 24** + pin **`npm@11`** (11.18, ≥11.5.1 for OIDC); (2) briefly removed `registry-url` → `ENEEDAUTH` (npm needs the registry context for OIDC) → **restored it** (npm 11.5.1+ prefers OIDC over setup-node's placeholder token). The real blocker was the **npm Trusted Publisher config**: `Organization or user` was `geekyants` (lowercase) but the OIDC claim is case-sensitive `GeekyAnts` → exchange returned `404 "package not found"`. After correcting the org casing on npm, the exchange returned `201` and `0.3.3` published **tokenlessly with SLSA provenance**. Verified live (`latest = 0.3.3`, attestation present, `npx …@0.3.3` runs). Also added a "Built by GeekyAnts" section (README) + docs footer callout linking `geekyants.com/ai-powered-product-engineering` (referral/brand link — npm/GitHub mark README links nofollow). Going forward: bump version → cut GitHub Release `vX.Y.Z` → CI auto-publishes (no token).
+- 2026-07-14 — **v1 registry-additions roadmap — COMPLETE.** Ran two 2026 market/GitHub-trend deep-research passes (fan-out search → source fetch → 3-vote adversarial verification) and worked the resulting backlog end-to-end as an autonomous loop: each item on its own feature branch → real SDK build/verify → CLI compose e2e → PR → merge. Every build item is merged across **both** repos. This note supersedes the local `v1-todo.md` planning file (now deleted); the durable outcome + reference lists live here.
+  - **New kinds (CLI):** `vector-db` (CLI #17), `orm` (CLI #18), `iac` (CLI #19), plus the `cline` tool target (CLI #20). Each threaded through `templates.ts`/`manifest.ts`/`create.ts` with backward-compat manifest backfill; `pkgjson.ts` merges `orm` deps; `manifest.ts` unions the new arrays.
+  - **AI-native stacks (the on-brand gap):** `mcp-server` + `mcp-server-py`, `vercel-ai-sdk` (AI SDK **v5 stable** — v7 was `latest` at build time; user chose v5), `langgraph` (LangChain 1.0 `createAgent`), `pydantic-ai`. vector-db: `pgvector` (default), `qdrant`, `chroma`.
+  - **Framework/infra breadth:** web `vue`/`svelte`/`sveltekit`/`astro`/`nuxt`/`angular`; backend `hono`/`django`/`spring-boot`/`aspnet`; desktop `tauri`; `react-native` bumped to **Expo SDK 57**. orm `prisma` (**Prisma 7**: `prisma.config.ts` + `@prisma/adapter-pg` driver adapter — v6 datasource `url` shape is gone) + `drizzle`. auth `better-auth` + `authjs`. databases `valkey`/`neon`/`supabase`. docs `fumadocs`/`starlight`.
+  - **License-safety policy (no SSPL/BSL/source-available in the registry):** **MinIO** (AGPL, likely relicense) → removed; **SeaweedFS** (Apache-2.0) is the self-host storage default + **Cloudflare R2** managed. **Redis** (SSPL/RSALv2) → **Valkey** (BSD-3). **Terraform** (BSL) → **OpenTofu only** (MPL-2.0). Weaviate (BSD-3) + Milvus (Apache-2.0) are fine (only Weaviate's *managed* pricing changed).
+  - **Baked into base templates (not new kinds):** an **LLM-provider** section (Anthropic/OpenAI SDK starter, default to latest Claude) and a **Deploying** section (Vercel/Cloudflare Workers/Netlify/Railway/Fly/Render) — covers the deploy-target lines without a `deploy` kind.
+  - **Skills/subagents batch 1:** skills `test-generation`/`debugging`/`pr-description`/`refactoring`/`performance-profiling`/`dependency-upgrade`; agents `test-engineer`/`api-designer`/`database-optimizer`/`performance-engineer`/`devops-engineer`/`docs-writer`/`accessibility-auditor`.
+  - **Cline tool target (CLI #20, CLI-only):** reuses the Claude-shaped source with two retargets — instructions → `AGENTS.md` (native), skills → `.clinerules/workflows/<n>.md` (slash commands). Cline has no per-file subagent format, so subagents aren't emitted for it.
+  - **Deferred to a future wave** (conscious scope calls, not incomplete work): tool targets **Aider** (~47k⭐), **Goose** (~51k⭐), **OpenHands** (~65–79k⭐); watch **Pi** (~70k⭐) before targeting. Skills `api-design`/`database-migration`/`commit-message`/`observability-setup`/`cost-monitoring`; per-language specialist subagents.
+  - **Do NOT add (declining/archived/risky):** Gemini CLI (Google retired free/consumer access Jun 2026), Roo Code (archived May 2026), Lucia auth (deprecated → Better Auth), TypeORM (fading for greenfield), Fastify/Express as *standout* stacks (not differentiated), Buildkite/Woodpecker/SST (no momentum), Pinecone (managed-only — client SDK + env only if ever added).
+  - **Watch (pricing/ops, not license):** Milvus (heavy for compose: etcd+object store+MQ), Weaviate managed pricing (Oct 2025), Fly.io/Railway free-tier removals — note in scaffolded docs.
+  - **Open follow-ups (own research pass):** vector-db breadth (LanceDB, risers); per-tool translation cost for the deferred Wave-4 targets; re-confirm `python-streamlit` earns its slot; validate each deploy config-file shape against a real deploy.
+  - **Latent, out-of-scope:** `updateRegistry()`/`pull()` keep a single-branch shallow clone of `main`, so the cache can't track a non-main branch; e2e verification against unmerged branches was done by positioning the cache with `git fetch --depth 1 origin <branch>` + `reset --hard FETCH_HEAD`, then restoring to `main`.
