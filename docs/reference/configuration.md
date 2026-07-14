@@ -2,10 +2,10 @@
 
 ## Template registry
 
-The CLI reads all templates — project types, stacks, databases, storage, auth,
-CI, docs, skills, agents, and the instruction bases — from a **git registry**.
-It's shallow-cloned to `~/.cache/create-ai-native-project/registry` on first use
-and cached from then on.
+The CLI reads all templates — project types, stacks, databases, vector DBs,
+ORMs, storage, auth, IaC, CI, docs, skills, agents, and the instruction bases —
+from a **git registry**. It's shallow-cloned to
+`~/.cache/create-ai-native-project/registry` on first use and cached from then on.
 
 - Run [`update`](/guide/usage#update) to refresh the cache (fetch + hard-reset to
   the configured ref). `update` also realigns the cache's `origin` with the
@@ -45,8 +45,11 @@ Each kind lives in a top-level directory; every template folder may include a
 project-types/<id>/   base instructions (CLAUDE.md) + package.json base
 stacks/<id>/          boilerplate + Dockerfile + CLAUDE.section.md + fragments + bundled agent
 databases/<id>/       CLAUDE.section.md + compose.service.yml
+vector-db/<id>/       CLAUDE.section.md + compose.service.yml (pgvector/qdrant/chroma)
+orm/<id>/             CLAUDE.section.md + package.json fragment (prisma/drizzle)
 storage/<id>/         CLAUDE.section.md + compose.service.yml
 auth/<id>/            CLAUDE.section.md + setup files
+iac/<id>/             CLAUDE.section.md + .tf scaffold (opentofu)
 ci/<id>/              base skeleton + per-stack job fragments
 docker/<id>/          docker-compose base + verbatim extras
 docs/<id>/            copied to the project docs/ (self-contained)
@@ -57,5 +60,6 @@ core.json             skills/agents installed on every project
 ```
 
 Some files are **composed** rather than copied verbatim: `template.json` (all
-kinds); `CLAUDE.section.md` + `compose.service.yml`; `CLAUDE.md` + `package.json`
-(project-type/stack); `docker-compose.yml`. Everything else is copied as-is.
+kinds); `CLAUDE.section.md` + `compose.service.yml` (stack/database/vector-db/storage/auth/IaC);
+`CLAUDE.md` + `package.json` (project-type/stack; `package.json` also for `orm`);
+`docker-compose.yml`. Everything else is copied as-is.

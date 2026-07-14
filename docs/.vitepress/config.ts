@@ -5,7 +5,7 @@ import { defineConfig } from "vitepress";
 export default defineConfig({
   title: "create-ai-native-project",
   description:
-    "Interactive CLI that scaffolds AI-native projects for Claude Code, OpenAI Codex, and OpenCode — instructions, skills, agents, runnable stacks, Docker, and CI from one registry.",
+    "Interactive CLI that scaffolds AI-native projects for Claude Code, OpenAI Codex, OpenCode, and Cline — instructions, skills, agents, runnable stacks (incl. AI-native: MCP, Vercel AI SDK, LangGraph, PydanticAI), databases, vector DBs, ORMs, storage, auth, IaC, Docker, and CI from one registry.",
   base: "/create-ai-native-project/",
   lang: "en-US",
   lastUpdated: true,

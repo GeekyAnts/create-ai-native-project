@@ -36,8 +36,9 @@ On first run the CLI clones the template registry into
 
 1. The CLI detects whether you're in an **existing project** or starting fresh.
 2. It asks which **agentic coding tool(s)** you use — Claude Code, OpenAI Codex,
-   OpenCode — then walks you through project type, stacks, databases, storage,
-   auth, skills, agents, docs, CI, and Docker.
+   OpenCode, Cline — then walks you through project type, stacks (web, backend,
+   mobile/desktop, and AI-native), databases, vector DBs, ORM, storage, auth,
+   IaC, skills, agents, docs, CI, and Docker.
 3. It generates the files, tailored to your tool(s), and records everything in
    [`.ai-native-project.json`](/reference/manifest) so future runs stay aware of
    what's already set up.

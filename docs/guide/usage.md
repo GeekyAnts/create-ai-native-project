@@ -41,12 +41,12 @@ fetches and hard-resets to the configured ref). See
 
 ```
 target (new / existing / --boot)
-  → agentic coding tool(s)   (Claude Code / Codex / OpenCode)
+  → agentic coding tool(s)   (Claude Code / Codex / OpenCode / Cline)
   → project type             (single / monorepo)
   → tech stack(s)
-  → database(s) · storage · auth
+  → database(s) · vector-db · ORM · storage · auth · IaC
   → skills · agents
-  → docs folder?  (Docusaurus)
+  → docs folder?  (Docusaurus / Fumadocs / Starlight)
   → CI?           (GitHub Actions / GitLab CI)
   → Docker?       (docker-compose)
   → generate
@@ -60,10 +60,11 @@ pickers, and the fixed **project type** is reused without asking again.
 ## What gets generated
 
 - An **instructions file** — `CLAUDE.md` and/or `AGENTS.md`, composed from the
-  project-type base plus a section per stack/database/storage/auth selection.
+  project-type base plus a section per stack/database/vector-db/storage/auth/IaC
+  selection.
 - **Skills & agents** in each selected tool's layout
   (see [Agentic Coding Tools](/guide/coding-tools)).
-- A runnable **`package.json`** (project-type base + stack fragments, merged).
+- A runnable **`package.json`** (project-type base + stack + ORM fragments, merged).
 - Optional **`docker-compose.yml`**, **CI pipeline**, and **docs** site.
 - The **core set** on every project: the `engineering-standards`,
   `knowledge-base`, and `using-create-ai-native-project` skills, plus the
