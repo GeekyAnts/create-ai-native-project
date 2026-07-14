@@ -30,8 +30,8 @@ npx create-ai-native-project update
 
 ## What it asks
 
-1. **Agentic coding tool(s)** — Claude Code, OpenAI Codex, and/or OpenCode. One
-   source is retargeted per tool: `CLAUDE.md`/`AGENTS.md`, `.claude`/`.opencode`/
+1. **Agentic coding tool(s)** — Claude Code, OpenAI Codex, OpenCode, and/or Cline.
+   One source is retargeted per tool: `CLAUDE.md`/`AGENTS.md`, `.claude`/`.opencode`/
    `.codex` agents, and shared skills. See
    [Agentic Coding Tools](https://geekyants.github.io/create-ai-native-project/guide/coding-tools).
 2. **Project type** — `single` or `monorepo` (fixed once set).
@@ -40,7 +40,11 @@ npx create-ai-native-project update
    Dockerfile, CI job fragments, and a specialist agent.
 4. **Databases** (Postgres/MySQL/MongoDB), **storage** (MinIO/AWS S3),
    **auth** (JWT/Clerk) — each contributes instructions sections and compose services.
-5. **Skills / agents**, an optional **docs site** (Docusaurus), **CI**
+5. **MCP servers** — a curated developer set (Chrome DevTools, Playwright,
+   Context7, GitHub, Filesystem, Git, Fetch, Sequential Thinking, Memory) written
+   to each tool's own config (`.mcp.json`, `opencode.json`, `.codex/config.toml`),
+   merged so servers you already have are never overwritten.
+6. **Skills / agents**, an optional **docs site** (Docusaurus), **CI**
    (GitHub Actions / GitLab CI — one job per stack/app), and **Docker**
    (docker-compose composed from your selections).
 

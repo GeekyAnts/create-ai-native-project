@@ -16,6 +16,7 @@ const state = (over: Partial<ManifestState> = {}): ManifestState => ({
   storage: [],
   auth: [],
   security: [],
+  mcp: [],
   ci: [],
   docker: false,
   docs: [],
@@ -149,6 +150,18 @@ describe("manifest", () => {
       "utf8",
     );
     expect((await readManifest(dir))?.security).toEqual([]);
+  });
+
+  it("unions mcp selections and backfills mcp=[] for older manifests", async () => {
+    await writeManifest(dir, state({ mcp: ["chrome-devtools"] }), "1.3.0", "2026-07-14T00:00:00.000Z");
+    const merged = await writeManifest(dir, state({ mcp: ["context7"] }), "1.3.0", "2026-07-14T01:00:00.000Z");
+    expect(merged.mcp).toEqual(["chrome-devtools", "context7"]);
+    await writeFile(
+      join(dir, ".ai-native-project.json"),
+      JSON.stringify({ generator: "create-ai-native-project", projectType: "single", stacks: [] }),
+      "utf8",
+    );
+    expect((await readManifest(dir))?.mcp).toEqual([]);
   });
 
   it("keeps projectName/brief and only overwrites with a new non-empty value", async () => {

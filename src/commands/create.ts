@@ -11,6 +11,7 @@ import {
   listOrm,
   listIac,
   listSecurity,
+  listMcp,
   listDocs,
   listProjectTypes,
   listSkills,
@@ -59,13 +60,17 @@ import {
   usedHostPorts,
   type Block,
 } from "../lib/augment.js";
+import {
+  composeMcpConfigs,
+  loadMcpSpecs,
+  type ExistingConfigs,
+} from "../lib/mcp.js";
 import { slugSegment } from "../lib/names.js";
 import {
   AGENTIC_TOOLS,
   installedNames,
   instructionFiles,
   normalizeTools,
-  opencodeConfig,
   retargetForTools,
   type ToolId,
 } from "../lib/tools.js";
@@ -207,6 +212,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   let storage: Option[] = [];
   let authOptions: Option[] = [];
   let securityOptions: Option[] = [];
+  let mcpOptions: Option[] = [];
   let ciOptions: Option[] = [];
   let docsOptions: Option[] = [];
   let skillOptions: Option[] = [];
@@ -214,7 +220,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   let dockerBaseId: string | null = null;
   let core: CoreSet = { skills: [], agents: [] };
   try {
-    const [pts, sts, dbs, vdb, ormList, iacList, sto, auth, sec, ci, dockers, docs, sk, ag, coreSet] =
+    const [pts, sts, dbs, vdb, ormList, iacList, sto, auth, sec, mcp, ci, dockers, docs, sk, ag, coreSet] =
       await Promise.all([
         listProjectTypes(),
         listStacks(),
@@ -225,6 +231,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
         listStorage(),
         listAuth(),
         listSecurity(),
+        listMcp(),
         listCi(),
         listTemplates("docker"),
         listDocs(),
@@ -242,6 +249,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     storage = toOptions(sto);
     authOptions = toOptions(auth);
     securityOptions = toOptions(sec);
+    mcpOptions = toOptions(mcp);
     ciOptions = toOptions(ci);
     docsOptions = toOptions(docs);
     // Core skills/agents are always installed — don't offer them in the pickers.
@@ -275,6 +283,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     storage = storage.filter(has(existingManifest.storage));
     authOptions = authOptions.filter(has(existingManifest.auth));
     securityOptions = securityOptions.filter(has(existingManifest.security));
+    mcpOptions = mcpOptions.filter(has(existingManifest.mcp));
     ciOptions = ciOptions.filter(has(existingManifest.ci));
     docsOptions = docsOptions.filter(has(existingManifest.docs));
     skillOptions = skillOptions.filter(has(existingManifest.skills));
@@ -308,6 +317,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
       storage,
       authOptions,
       securityOptions,
+      mcpOptions,
       ciOptions,
       dockerBaseId,
       docsOptions,
@@ -336,6 +346,8 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   if (selectedIac === null) return p.cancel("Cancelled.");
   const selectedSecurity = await pickMany("security standard(s)", securityOptions, false);
   if (selectedSecurity === null) return p.cancel("Cancelled.");
+  const selectedMcp = await pickMany("MCP server(s)", mcpOptions, false);
+  if (selectedMcp === null) return p.cancel("Cancelled.");
 
   // 5. Skills & agents.
   const selectedSkills = await pickMany("skills", skillOptions, false);
@@ -440,6 +452,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     ...selectedStorage.map((id) => ({ kind: "storage" as const, id })),
     ...selectedAuth.map((id) => ({ kind: "auth" as const, id })),
     ...selectedSecurity.map((id) => ({ kind: "security" as const, id })),
+    ...selectedMcp.map((id) => ({ kind: "mcp" as const, id })),
   ];
 
   // 6. Write. Setup files never overwrite user files; generator-composed files
@@ -460,7 +473,12 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     ...unionStr(existingManifest?.storage ?? [], selectedStorage).map((id) => ({ kind: "storage" as const, id })),
     ...unionStr(existingManifest?.auth ?? [], selectedAuth).map((id) => ({ kind: "auth" as const, id })),
     ...unionStr(existingManifest?.security ?? [], selectedSecurity).map((id) => ({ kind: "security" as const, id })),
+    ...unionStr(existingManifest?.mcp ?? [], selectedMcp).map((id) => ({ kind: "mcp" as const, id })),
   ];
+  // Effective MCP servers = already-installed ∪ just-picked. Composing configs
+  // from this set both adds new servers and backfills them for any newly added
+  // tool (the mergers skip servers already present, so re-runs stay idempotent).
+  const mergedMcp = unionStr(existingManifest?.mcp ?? [], selectedMcp);
   const build = p.spinner();
   build.start("Scaffolding…");
   const result: WriteResult = { written: [], skipped: [] };
@@ -555,13 +573,11 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     for (const id of skillsToInstall) merge(result, await copy("skill", id, targetDir, overwrite, selectedTools));
     for (const id of agentsToInstall) merge(result, await copy("agent", id, targetDir, overwrite, selectedTools));
 
-    // opencode.json marks the project as OpenCode-aware (points at AGENTS.md).
-    if (selectedTools.includes("opencode")) {
-      const existing = isAdd ? await readIfExists(resolve(targetDir, "opencode.json")) : null;
-      if (existing === null) {
-        merge(result, await writeFile(targetDir, "opencode.json", opencodeConfig(), overwrite));
-      }
-    }
+    // MCP servers + opencode.json: generate each tool's MCP config, merged into
+    // any existing config (never clobbering servers the user already has).
+    // opencode.json is (re)written here whenever OpenCode is targeted — it both
+    // marks the project OpenCode-aware and carries the `mcp` block.
+    merge(result, await writeMcpConfigs(targetDir, mergedMcp, selectedTools));
 
     // Adding a tool to an existing project: backfill that tool's agent/skill
     // layouts for pieces already installed (stack-bundled + standalone agents,
@@ -630,6 +646,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
       storage: selectedStorage,
       auth: selectedAuth,
       security: selectedSecurity,
+      mcp: selectedMcp,
       ci: selectedCi,
       docker: wantDocker,
       docs: selectedDocs,
@@ -719,6 +736,7 @@ interface MonorepoContext {
   storage: Option[];
   authOptions: Option[];
   securityOptions: Option[];
+  mcpOptions: Option[];
   ciOptions: Option[];
   dockerBaseId: string | null;
   docsOptions: Option[];
@@ -803,6 +821,8 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
   if (selectedAuth === null) return p.cancel("Cancelled.");
   const selectedSecurity = await pickMany("security standard(s)", ctx.securityOptions, false);
   if (selectedSecurity === null) return p.cancel("Cancelled.");
+  const selectedMcp = await pickMany("MCP server(s)", ctx.mcpOptions, false);
+  if (selectedMcp === null) return p.cancel("Cancelled.");
   const selectedSkills = await pickMany("skills", ctx.skillOptions, false);
   if (selectedSkills === null) return p.cancel("Cancelled.");
   const selectedAgents = await pickMany("agents", ctx.agentOptions, false);
@@ -885,6 +905,7 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
     ...selectedStorage.map((id) => ({ kind: "storage" as const, id })),
     ...selectedAuth.map((id) => ({ kind: "auth" as const, id })),
     ...selectedSecurity.map((id) => ({ kind: "security" as const, id })),
+    ...selectedMcp.map((id) => ({ kind: "mcp" as const, id })),
   ];
   // Picking any security standard pulls in the security skill + agents.
   const secSkills = selectedSecurity.length ? SECURITY_SKILLS : [];
@@ -901,7 +922,9 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
     ...unionStr(ctx.existingManifest?.storage ?? [], selectedStorage).map((id) => ({ kind: "storage" as const, id })),
     ...unionStr(ctx.existingManifest?.auth ?? [], selectedAuth).map((id) => ({ kind: "auth" as const, id })),
     ...unionStr(ctx.existingManifest?.security ?? [], selectedSecurity).map((id) => ({ kind: "security" as const, id })),
+    ...unionStr(ctx.existingManifest?.mcp ?? [], selectedMcp).map((id) => ({ kind: "mcp" as const, id })),
   ];
+  const mergedMcp = unionStr(ctx.existingManifest?.mcp ?? [], selectedMcp);
 
   const build = p.spinner();
   build.start("Scaffolding monorepo…");
@@ -1005,6 +1028,9 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
         ));
       }
     }
+
+    // MCP servers + opencode.json (single writer for both new and add runs).
+    merge(result, await writeMcpConfigs(targetDir, mergedMcp, ctx.tools));
     build.stop(`Wrote ${result.written.length} file(s) across ${apps.length} app(s).`);
   } catch (err) {
     build.stop(pc.red("Scaffolding failed."));
@@ -1035,6 +1061,7 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
       storage: selectedStorage,
       auth: selectedAuth,
       security: selectedSecurity,
+      mcp: selectedMcp,
       ci: selectedCi,
       docker: wantDocker,
       docs: selectedDocs,
@@ -1094,6 +1121,37 @@ async function copy(
 ): Promise<WriteResult> {
   const files = await fetchTemplate(kind, id);
   return writeTemplateFiles(targetDir, retargetForTools(files, tools), { overwrite });
+}
+
+/**
+ * Generate each selected tool's MCP config for the given servers, merged into
+ * any existing on-disk config so servers the user already has are never
+ * clobbered. Writes a file only when its content actually changes, so re-runs
+ * (and runs that only add a tool) stay clean. `opencode.json` is emitted
+ * whenever OpenCode is targeted; the other files only when there are servers.
+ */
+async function writeMcpConfigs(
+  targetDir: string,
+  mcpIds: string[],
+  tools: ToolId[],
+): Promise<WriteResult> {
+  const result: WriteResult = { written: [], skipped: [] };
+  // Nothing to do when there are no servers and OpenCode isn't targeted.
+  if (mcpIds.length === 0 && !tools.includes("opencode")) return result;
+
+  const specs = await loadMcpSpecs(mcpIds);
+  const existing: ExistingConfigs = {
+    mcpJson: await readIfExists(resolve(targetDir, ".mcp.json")),
+    opencodeJson: await readIfExists(resolve(targetDir, "opencode.json")),
+    codexToml: await readIfExists(resolve(targetDir, ".codex/config.toml")),
+  };
+  for (const file of composeMcpConfigs(specs, tools, existing)) {
+    const current = await readIfExists(resolve(targetDir, file.path));
+    if (current !== file.contents) {
+      merge(result, await writeFile(targetDir, file.path, file.contents, true));
+    }
+  }
+  return result;
 }
 
 /**
