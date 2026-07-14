@@ -22,6 +22,10 @@ export interface ProjectManifest {
   createdAt: string;
   updatedAt: string;
   projectType: string | null;
+  /** Human-readable project name (injected into the instructions file). */
+  projectName?: string | null;
+  /** One-line project brief (injected into the instructions file). */
+  brief?: string | null;
   /** Agentic coding tools this project targets (claude-code / codex / opencode). */
   tools: ToolId[];
   stacks: string[];
@@ -99,6 +103,9 @@ export async function writeManifest(
     updatedAt: now,
     // Project type is fixed once set — an existing value always wins.
     projectType: prev?.projectType ?? next.projectType ?? null,
+    // Name/brief: a new non-empty value wins; otherwise keep what's there.
+    projectName: next.projectName || prev?.projectName || null,
+    brief: next.brief || prev?.brief || null,
     tools: normalizeTools(union(prev?.tools, next.tools)),
     stacks: union(prev?.stacks, next.stacks),
     apps: unionApps(prev?.apps, next.apps),

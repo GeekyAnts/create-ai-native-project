@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { fetchTemplate, readTemplateFile, type TemplateRef } from "./templates.js";
+import { applyProjectMeta, type ProjectMeta } from "./claudemd.js";
 import { composePackageJson } from "./pkgjson.js";
 import { writeTemplateFiles, type WriteResult } from "./files.js";
 import { readCiComposeConfig, type ComposedFile } from "./ci.js";
@@ -13,6 +14,8 @@ import type { AppEntry } from "./manifest.js";
 
 export interface MonorepoPlan {
   projectName: string;
+  /** Project identity injected into the composed instructions file. */
+  meta?: ProjectMeta;
   /** Agentic coding tools to target (drives instruction file + agent layouts). */
   tools: ToolId[];
   apps: AppEntry[];
@@ -49,6 +52,7 @@ function mergeWR(into: WriteResult, from: WriteResult): void {
 export async function composeMonorepoClaudeMd(
   apps: AppEntry[],
   sectionRefs: TemplateRef[],
+  meta?: ProjectMeta,
 ): Promise<string | null> {
   let base = await readTemplateFile("project-type", "monorepo", "CLAUDE.md");
   if (base === null) base = await readTemplateFile("claude", "default", "CLAUDE.md");
@@ -64,7 +68,7 @@ export async function composeMonorepoClaudeMd(
     const sec = await readTemplateFile(ref.kind, ref.id, "CLAUDE.section.md");
     if (sec && sec.trim().length > 0) out += "\n\n" + sec.trim();
   }
-  return out + "\n";
+  return applyProjectMeta(out + "\n", meta);
 }
 
 // ---- Per-app Docker & CI composition (transforms on stack fragments) --------
@@ -246,7 +250,7 @@ export async function scaffoldMonorepo(
   }
 
   if (plan.includeClaudeMd) {
-    const md = await composeMonorepoClaudeMd(plan.apps, plan.sectionRefs);
+    const md = await composeMonorepoClaudeMd(plan.apps, plan.sectionRefs, plan.meta);
     if (md) {
       for (const fname of instructionFiles(plan.tools)) {
         mergeWR(result, await writeTemplateFiles(targetDir, [{ path: fname, contents: md }], { overwrite }));
