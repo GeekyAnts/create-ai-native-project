@@ -156,8 +156,9 @@ A **CLI tool** (`create-ai-native-project`) that helps users make a project
 
 **Interactive flow:** target (new/existing/`--boot`) → **agentic coding tool(s)
 (Claude Code / Codex / OpenCode / Cline)** → project type (single) →
-tech stack(s) → database(s) → vector-db → ORM → storage → auth → IaC → skills →
-agents → CI? → docs folder? → Docker? → generate → optional dependency install.
+tech stack(s) → database(s) → vector-db → ORM → storage → auth → IaC →
+security standard(s) → skills → agents → CI? → docs folder? → Docker? → generate
+→ optional dependency install.
 
 **Multi-tool output:** the same registry source (Claude-Code-shaped) is
 retargeted per selected tool (`lib/tools.ts`): instructions → `CLAUDE.md`
@@ -256,6 +257,7 @@ shallow-cloned/updated into a local cache (`~/.cache/create-ai-native-project/re
   databases/<id>/      → CLAUDE.section.md + compose.service.yml (postgres/mysql/mongodb)
   storage/<id>/        → CLAUDE.section.md + compose.service.yml (minio/aws-s3)
   auth/<id>/           → CLAUDE.section.md + setup files (jwt/clerk)
+  security/<id>/       → CLAUDE.section.md (7 priority groups: essential/infrastructure/…)
   docker/<id>/         → docker-compose.yml base (composed) + verbatim extras (.dockerignore)
   ci/<id>/             → base skeleton + per-stack job fragments composed (github-actions → .github/workflows/ci.yml; gitlab-ci → .gitlab-ci.yml)
   docs/<id>/           → copied to project docs/ (self-contained sub-project, e.g. Docusaurus)
@@ -264,14 +266,15 @@ shallow-cloned/updated into a local cache (`~/.cache/create-ai-native-project/re
   claude/<id>/         → base CLAUDE.md fallback (e.g. claude/default/CLAUDE.md)
   ```
   **Composed (not copied verbatim):** `template.json` (all kinds);
-  `CLAUDE.section.md` + `compose.service.yml` (project-type/stack/database/vector-db/storage/auth/iac);
+  `CLAUDE.section.md` + `compose.service.yml` (project-type/stack/database/vector-db/storage/auth/iac/security);
   `CLAUDE.md` + `package.json` (project-type/stack; `package.json` also for `orm`);
   `docker-compose.yml` (docker).
   Everything else is copied — so a `docs/` template keeps its own `package.json`,
   and `requirements.txt` / Dockerfiles / CI files drop in as setup files.
 - **Kinds:** project-type, stack, database, **vector-db**, **orm**, storage,
-  auth, **iac**, docker, ci, docs, skill, agent, claude. (`vector-db`/`orm`/`iac`
-  added in the v1 roadmap — see the 2026-07-14 note in §9.5.)
+  auth, **iac**, **security**, docker, ci, docs, skill, agent, claude.
+  (`vector-db`/`orm`/`iac` added in the v1 roadmap — see the 2026-07-14 note in
+  §9.5; `security` added 2026-07-14 — see the note below.)
 - **Status:** ✅ seeded (branch `main`), grown substantially in the v1 roadmap:
   - project-types: `single`, `monorepo` (monorepo has a `package.json` base)
   - stacks — web: `react`, `nextjs`, `vue`, `svelte`, `sveltekit`, `astro`,
@@ -287,14 +290,18 @@ shallow-cloned/updated into a local cache (`~/.cache/create-ai-native-project/re
   - orm: `prisma`, `drizzle` · storage: `seaweedfs` (self-host default),
     `cloudflare-r2`, `aws-s3` (MinIO removed — AGPL/license risk)
   - auth: `jwt`, `clerk`, `better-auth`, `authjs` · iac: `opentofu`
+  - security (7 priority groups): `essential`, `infrastructure`, `governance`,
+    `testing-validation`, `identity-access`, `supply-chain`, `industry-compliance`
   - ci: `github-actions`, `gitlab-ci` · docker: `compose` base
   - docs: `docusaurus`, `fumadocs`, `starlight`
   - skills (core + batch 1): `knowledge-base`, `engineering-standards`,
     `using-create-ai-native-project`, `test-generation`, `debugging`,
-    `pr-description`, `refactoring`, `performance-profiling`, `dependency-upgrade`
+    `pr-description`, `refactoring`, `performance-profiling`, `dependency-upgrade`,
+    `security-standards`
   - agents (core + batch 1): `code-reviewer`, `security-reviewer`,
     `test-engineer`, `api-designer`, `database-optimizer`, `performance-engineer`,
-    `devops-engineer`, `docs-writer`, `accessibility-auditor` · `claude/default` fallback
+    `devops-engineer`, `docs-writer`, `accessibility-auditor`, `threat-modeler`,
+    `security-auditor` · `claude/default` fallback
   - Verified end-to-end (single + node-nest + postgres + jwt + github-actions +
     docker): composed CLAUDE.md (all sections), full NestJS boilerplate, root
     Dockerfile, `.github/workflows/ci.yml`, and a `docker-compose.yml` using
@@ -385,3 +392,4 @@ tsconfig.json         # strict TS, Bundler resolution
   - **Watch (pricing/ops, not license):** Milvus (heavy for compose: etcd+object store+MQ), Weaviate managed pricing (Oct 2025), Fly.io/Railway free-tier removals — note in scaffolded docs.
   - **Open follow-ups (own research pass):** vector-db breadth (LanceDB, risers); per-tool translation cost for the deferred Wave-4 targets; re-confirm `python-streamlit` earns its slot; validate each deploy config-file shape against a real deploy.
   - **Latent, out-of-scope:** `updateRegistry()`/`pull()` keep a single-branch shallow clone of `main`, so the cache can't track a non-main branch; e2e verification against unmerged branches was done by positioning the cache with `git fetch --depth 1 origin <branch>` + `reset --hard FETCH_HEAD`, then restoring to `main`.
+- 2026-07-14 — **Security-standards kind** (v1.1.0, CLI branch `feat/security-kind` + registry branch `feat/security-standards`). Added a **`security` kind** — a section-contributing fragment kind like `iac`/`auth` — threaded through `templates.ts` (`TemplateKind`/`FRAGMENT_KINDS`/`KIND_DIR`/`TARGET_ROOT`/`listSecurity`), `manifest.ts` (`security: string[]` + backward-compat backfill `[]` + union), and `create.ts` (single + monorepo flows; prompt after IaC; `refs`/`mergedRefs`/`sectionRefs`; `copy("security", …)`; manifest write). Registry ships **7 priority groups** (from a user-supplied table), one selectable option each, whose `CLAUDE.section.md` maps its standards to concrete guidance: `essential` (NIST SSDF, OWASP ASVS/Top 10/API Top 10, CWE Top 25), `infrastructure` (CIS Benchmarks, NIST 800-190, CIS K8s), `governance` (ISO 27001, NIST CSF 2.0, ISO 31000), `testing-validation` (OWASP WSTG, PTES, NIST 800-115), `identity-access` (NIST 800-63/800-207), `supply-chain` (SLSA, CycloneDX, SPDX, Sigstore), `industry-compliance` (GDPR, PCI DSS, HIPAA, FedRAMP, SOC 2, DPDP Act). **Auto-install on selection:** picking ≥1 group unions in the new `security-standards` skill + `threat-modeler` (STRIDE) and `security-auditor` (standards-conformance) agents — mirroring how a stack installs its specialist; they stay independently pickable (`unionStr` dedups) and are NOT in `core.json`. New manifest test (52 total). Security groups ship no verbatim setup files (section-only), so the monorepo flow needs no `monorepo.ts` change (handled via `sectionRefs`, like databases/storage).

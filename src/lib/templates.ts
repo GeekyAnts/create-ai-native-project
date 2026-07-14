@@ -40,6 +40,7 @@ export type TemplateKind =
   | "iac"
   | "storage"
   | "auth"
+  | "security"
   | "docker"
   | "ci"
   | "docs"
@@ -69,6 +70,7 @@ const FRAGMENT_KINDS: TemplateKind[] = [
   "iac",
   "storage",
   "auth",
+  "security",
 ];
 
 /**
@@ -130,6 +132,7 @@ const KIND_DIR: Record<TemplateKind, string> = {
   iac: "iac",
   storage: "storage",
   auth: "auth",
+  security: "security",
   docker: "docker",
   ci: "ci",
   docs: "docs",
@@ -148,6 +151,7 @@ const TARGET_ROOT: Record<TemplateKind, (id: string) => string> = {
   iac: () => "",
   storage: () => "",
   auth: () => "",
+  security: () => "",
   docker: () => "",
   ci: () => "",
   docs: () => "docs",
@@ -262,6 +266,7 @@ export const listOrm = () => listTemplates("orm");
 export const listIac = () => listTemplates("iac");
 export const listStorage = () => listTemplates("storage");
 export const listAuth = () => listTemplates("auth");
+export const listSecurity = () => listTemplates("security");
 export const listCi = () => listTemplates("ci");
 export const listDocs = () => listTemplates("docs");
 export const listSkills = () => listTemplates("skill");

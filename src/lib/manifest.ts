@@ -35,6 +35,8 @@ export interface ProjectManifest {
   iac: string[];
   storage: string[];
   auth: string[];
+  /** Security standards the project follows (essential, infrastructure, …). */
+  security: string[];
   ci: string[];
   docker: boolean;
   docs: string[];
@@ -60,6 +62,8 @@ export async function readManifest(dir: string): Promise<ProjectManifest | null>
     if (!Array.isArray(parsed.orm)) parsed.orm = [];
     // Backward compat: the iac kind was added later — default to empty.
     if (!Array.isArray(parsed.iac)) parsed.iac = [];
+    // Backward compat: the security kind was added later — default to empty.
+    if (!Array.isArray(parsed.security)) parsed.security = [];
     return parsed;
   } catch {
     return null;
@@ -104,6 +108,7 @@ export async function writeManifest(
     iac: union(prev?.iac, next.iac),
     storage: union(prev?.storage, next.storage),
     auth: union(prev?.auth, next.auth),
+    security: union(prev?.security, next.security),
     ci: union(prev?.ci, next.ci),
     docker: next.docker || Boolean(prev?.docker),
     docs: union(prev?.docs, next.docs),

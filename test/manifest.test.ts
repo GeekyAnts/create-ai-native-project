@@ -15,6 +15,7 @@ const state = (over: Partial<ManifestState> = {}): ManifestState => ({
   iac: [],
   storage: [],
   auth: [],
+  security: [],
   ci: [],
   docker: false,
   docs: [],
@@ -136,6 +137,18 @@ describe("manifest", () => {
       "utf8",
     );
     expect((await readManifest(dir))?.iac).toEqual([]);
+  });
+
+  it("unions security selections and backfills security=[] for older manifests", async () => {
+    await writeManifest(dir, state({ security: ["essential"] }), "1.1.0", "2026-07-14T00:00:00.000Z");
+    const merged = await writeManifest(dir, state({ security: ["supply-chain"] }), "1.1.0", "2026-07-14T01:00:00.000Z");
+    expect(merged.security).toEqual(["essential", "supply-chain"]);
+    await writeFile(
+      join(dir, ".ai-native-project.json"),
+      JSON.stringify({ generator: "create-ai-native-project", projectType: "single", stacks: [] }),
+      "utf8",
+    );
+    expect((await readManifest(dir))?.security).toEqual([]);
   });
 
   it("defaults tools to claude-code and unions tool selections", async () => {

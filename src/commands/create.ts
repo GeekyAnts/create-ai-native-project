@@ -10,6 +10,7 @@ import {
   listVectorDb,
   listOrm,
   listIac,
+  listSecurity,
   listDocs,
   listProjectTypes,
   listSkills,
@@ -90,11 +91,21 @@ type CopyKind =
   | "iac"
   | "storage"
   | "auth"
+  | "security"
   | "docker"
   | "ci"
   | "docs"
   | "skill"
   | "agent";
+
+/**
+ * Selecting any security standard auto-installs the security playbook skill and
+ * the security specialist agents — so the project has the guidance + tooling to
+ * apply the standards it declared. These stay independently pickable too;
+ * `unionStr` dedups.
+ */
+const SECURITY_SKILLS = ["security-standards"];
+const SECURITY_AGENTS = ["threat-modeler", "security-auditor"];
 
 const toOptions = (metas: TemplateMeta[]): Option[] =>
   metas.map((m) => ({ value: m.id, label: m.name, hint: m.description }));
@@ -167,6 +178,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   let iac: Option[] = [];
   let storage: Option[] = [];
   let authOptions: Option[] = [];
+  let securityOptions: Option[] = [];
   let ciOptions: Option[] = [];
   let docsOptions: Option[] = [];
   let skillOptions: Option[] = [];
@@ -174,7 +186,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   let dockerBaseId: string | null = null;
   let core: CoreSet = { skills: [], agents: [] };
   try {
-    const [pts, sts, dbs, vdb, ormList, iacList, sto, auth, ci, dockers, docs, sk, ag, coreSet] =
+    const [pts, sts, dbs, vdb, ormList, iacList, sto, auth, sec, ci, dockers, docs, sk, ag, coreSet] =
       await Promise.all([
         listProjectTypes(),
         listStacks(),
@@ -184,6 +196,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
         listIac(),
         listStorage(),
         listAuth(),
+        listSecurity(),
         listCi(),
         listTemplates("docker"),
         listDocs(),
@@ -200,6 +213,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     iac = toOptions(iacList);
     storage = toOptions(sto);
     authOptions = toOptions(auth);
+    securityOptions = toOptions(sec);
     ciOptions = toOptions(ci);
     docsOptions = toOptions(docs);
     // Core skills/agents are always installed — don't offer them in the pickers.
@@ -232,6 +246,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     iac = iac.filter(has(existingManifest.iac));
     storage = storage.filter(has(existingManifest.storage));
     authOptions = authOptions.filter(has(existingManifest.auth));
+    securityOptions = securityOptions.filter(has(existingManifest.security));
     ciOptions = ciOptions.filter(has(existingManifest.ci));
     docsOptions = docsOptions.filter(has(existingManifest.docs));
     skillOptions = skillOptions.filter(has(existingManifest.skills));
@@ -263,6 +278,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
       vectorDb,
       storage,
       authOptions,
+      securityOptions,
       ciOptions,
       dockerBaseId,
       docsOptions,
@@ -289,6 +305,8 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   if (selectedAuth === null) return p.cancel("Cancelled.");
   const selectedIac = await pickMany("infrastructure-as-code", iac, false);
   if (selectedIac === null) return p.cancel("Cancelled.");
+  const selectedSecurity = await pickMany("security standard(s)", securityOptions, false);
+  if (selectedSecurity === null) return p.cancel("Cancelled.");
 
   // 5. Skills & agents.
   const selectedSkills = await pickMany("skills", skillOptions, false);
@@ -392,6 +410,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     ...selectedIac.map((id) => ({ kind: "iac" as const, id })),
     ...selectedStorage.map((id) => ({ kind: "storage" as const, id })),
     ...selectedAuth.map((id) => ({ kind: "auth" as const, id })),
+    ...selectedSecurity.map((id) => ({ kind: "security" as const, id })),
   ];
 
   // 6. Write. Setup files never overwrite user files; generator-composed files
@@ -411,6 +430,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     ...unionStr(existingManifest?.iac ?? [], selectedIac).map((id) => ({ kind: "iac" as const, id })),
     ...unionStr(existingManifest?.storage ?? [], selectedStorage).map((id) => ({ kind: "storage" as const, id })),
     ...unionStr(existingManifest?.auth ?? [], selectedAuth).map((id) => ({ kind: "auth" as const, id })),
+    ...unionStr(existingManifest?.security ?? [], selectedSecurity).map((id) => ({ kind: "security" as const, id })),
   ];
   const build = p.spinner();
   build.start("Scaffolding…");
@@ -471,6 +491,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     for (const id of selectedIac) merge(result, await copy("iac", id, targetDir, overwrite, selectedTools));
     for (const id of selectedStorage) merge(result, await copy("storage", id, targetDir, overwrite, selectedTools));
     for (const id of selectedAuth) merge(result, await copy("auth", id, targetDir, overwrite, selectedTools));
+    for (const id of selectedSecurity) merge(result, await copy("security", id, targetDir, overwrite, selectedTools));
 
     // CI: append new-stack jobs to already-installed providers; compose fresh
     // (from the merged stack set) for newly selected providers.
@@ -497,8 +518,11 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     }
 
     for (const id of selectedDocs) merge(result, await copy("docs", id, targetDir, overwrite, selectedTools));
-    const skillsToInstall = unionStr(core.skills, selectedSkills);
-    const agentsToInstall = unionStr(core.agents, selectedAgents);
+    // Picking any security standard pulls in the security skill + agents.
+    const secSkills = selectedSecurity.length ? SECURITY_SKILLS : [];
+    const secAgents = selectedSecurity.length ? SECURITY_AGENTS : [];
+    const skillsToInstall = unionStr(unionStr(core.skills, selectedSkills), secSkills);
+    const agentsToInstall = unionStr(unionStr(core.agents, selectedAgents), secAgents);
     for (const id of skillsToInstall) merge(result, await copy("skill", id, targetDir, overwrite, selectedTools));
     for (const id of agentsToInstall) merge(result, await copy("agent", id, targetDir, overwrite, selectedTools));
 
@@ -574,6 +598,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
       iac: selectedIac,
       storage: selectedStorage,
       auth: selectedAuth,
+      security: selectedSecurity,
       ci: selectedCi,
       docker: wantDocker,
       docs: selectedDocs,
@@ -661,6 +686,7 @@ interface MonorepoContext {
   vectorDb: Option[];
   storage: Option[];
   authOptions: Option[];
+  securityOptions: Option[];
   ciOptions: Option[];
   dockerBaseId: string | null;
   docsOptions: Option[];
@@ -743,6 +769,8 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
   if (selectedStorage === null) return p.cancel("Cancelled.");
   const selectedAuth = await pickMany("auth option(s)", ctx.authOptions, false);
   if (selectedAuth === null) return p.cancel("Cancelled.");
+  const selectedSecurity = await pickMany("security standard(s)", ctx.securityOptions, false);
+  if (selectedSecurity === null) return p.cancel("Cancelled.");
   const selectedSkills = await pickMany("skills", ctx.skillOptions, false);
   if (selectedSkills === null) return p.cancel("Cancelled.");
   const selectedAgents = await pickMany("agents", ctx.agentOptions, false);
@@ -824,9 +852,13 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
     ...selectedVectorDb.map((id) => ({ kind: "vector-db" as const, id })),
     ...selectedStorage.map((id) => ({ kind: "storage" as const, id })),
     ...selectedAuth.map((id) => ({ kind: "auth" as const, id })),
+    ...selectedSecurity.map((id) => ({ kind: "security" as const, id })),
   ];
-  const skills = unionStr(ctx.core.skills, selectedSkills);
-  const agents = unionStr(ctx.core.agents, selectedAgents);
+  // Picking any security standard pulls in the security skill + agents.
+  const secSkills = selectedSecurity.length ? SECURITY_SKILLS : [];
+  const secAgents = selectedSecurity.length ? SECURITY_AGENTS : [];
+  const skills = unionStr(unionStr(ctx.core.skills, selectedSkills), secSkills);
+  const agents = unionStr(unionStr(ctx.core.agents, selectedAgents), secAgents);
   const overwrite = mode === "new";
   const isAdd = mode === "existing";
   // Merged state, for composing files from scratch on add runs.
@@ -836,6 +868,7 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
     ...unionStr(ctx.existingManifest?.vectorDb ?? [], selectedVectorDb).map((id) => ({ kind: "vector-db" as const, id })),
     ...unionStr(ctx.existingManifest?.storage ?? [], selectedStorage).map((id) => ({ kind: "storage" as const, id })),
     ...unionStr(ctx.existingManifest?.auth ?? [], selectedAuth).map((id) => ({ kind: "auth" as const, id })),
+    ...unionStr(ctx.existingManifest?.security ?? [], selectedSecurity).map((id) => ({ kind: "security" as const, id })),
   ];
 
   const build = p.spinner();
@@ -966,6 +999,7 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
       iac: [],
       storage: selectedStorage,
       auth: selectedAuth,
+      security: selectedSecurity,
       ci: selectedCi,
       docker: wantDocker,
       docs: selectedDocs,
