@@ -46,6 +46,15 @@ features:
 
 ---
 
+## See it in action
+
+The interactive wizard scaffolding a NestJS + Postgres project — instructions,
+agents, skills, Docker, and CI in one pass. [More demos →](/guide/demos)
+
+![create-ai-native-project scaffolding a project](/demos/wizard.gif)
+
+---
+
 > **Built by [GeekyAnts](https://geekyants.com).** Need to ship an AI-native product faster?
 > Explore **[AI-powered product engineering](https://geekyants.com/ai-powered-product-engineering)** —
 > dedicated engineers and consulting.

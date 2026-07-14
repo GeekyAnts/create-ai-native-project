@@ -6,6 +6,8 @@ reusable **skills** and **agents**, runnable **stack boilerplate**,
 **docker-compose**, and **CI** — all composed from a central
 [template registry](/reference/configuration).
 
+> ▶ **See it in action** — watch the wizard scaffold a project in the [Demos](/guide/demos).
+
 ## Prerequisites
 
 - **Node.js ≥ 20.12** (the CLI relies on `process.loadEnvFile`).
