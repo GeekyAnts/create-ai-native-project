@@ -41,6 +41,7 @@ fetches and hard-resets to the configured ref). See
 
 ```
 target (new / existing / --boot)
+  → project name + brief     (injected into CLAUDE.md / AGENTS.md)
   → agentic coding tool(s)   (Claude Code / Codex / OpenCode / Cline)
   → project type             (single / monorepo)
   → tech stack(s)
@@ -61,7 +62,9 @@ pickers, and the fixed **project type** is reused without asking again.
 
 - An **instructions file** — `CLAUDE.md` and/or `AGENTS.md`, composed from the
   project-type base plus a section per stack/database/vector-db/storage/auth/IaC/
-  security selection.
+  security selection. The **project name** and **brief** you enter at the start
+  are substituted into the file's title, description, and Overview so the agent
+  knows what the project is from the first line.
 - **Security standards** — pick from 7 priority groups (Essential, Infrastructure,
   Enterprise Governance, Testing & Validation, Identity & Access, Supply Chain,
   Industry Compliance); each appends a `## Security:` section mapping its standards

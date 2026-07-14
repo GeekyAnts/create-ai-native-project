@@ -151,6 +151,18 @@ describe("manifest", () => {
     expect((await readManifest(dir))?.security).toEqual([]);
   });
 
+  it("keeps projectName/brief and only overwrites with a new non-empty value", async () => {
+    await writeManifest(dir, state({ projectName: "Acme", brief: "First brief" }), "1.2.0", "2026-07-14T00:00:00.000Z");
+    // A blank re-run preserves the existing name/brief.
+    let m = await writeManifest(dir, state({ projectName: "", brief: "" }), "1.2.0", "2026-07-14T01:00:00.000Z");
+    expect(m.projectName).toBe("Acme");
+    expect(m.brief).toBe("First brief");
+    // A non-empty value overwrites.
+    m = await writeManifest(dir, state({ projectName: "Acme Chat", brief: "Updated brief" }), "1.2.0", "2026-07-14T02:00:00.000Z");
+    expect(m.projectName).toBe("Acme Chat");
+    expect(m.brief).toBe("Updated brief");
+  });
+
   it("defaults tools to claude-code and unions tool selections", async () => {
     // No tools specified -> backward-compat default.
     const fresh = await writeManifest(dir, state(), "0.3.0", "2026-07-10T00:00:00.000Z");

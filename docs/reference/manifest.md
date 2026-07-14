@@ -13,6 +13,8 @@ what's already set up — avoiding duplicate or inapplicable actions.
   "createdAt": "2026-07-14T00:00:00.000Z",
   "updatedAt": "2026-07-14T00:00:00.000Z",
   "projectType": "single",
+  "projectName": "Acme Chat",
+  "brief": "Realtime chat app for support teams",
   "tools": ["claude-code", "codex", "opencode", "cline"],
   "stacks": ["nextjs", "vercel-ai-sdk"],
   "apps": [],
@@ -39,6 +41,7 @@ what's already set up — avoiding duplicate or inapplicable actions.
 | `version` | string | CLI version that last wrote the manifest. |
 | `createdAt` / `updatedAt` | ISO string | `createdAt` is preserved across re-runs. |
 | `projectType` | `single` \| `monorepo` \| null | **Immutable** once set. |
+| `projectName` · `brief` | string \| null | Human-readable name + one-line brief, asked up front and substituted into the instructions file's title / description / overview. A blank answer on a re-run keeps the existing value. |
 | `tools` | string[] | `claude-code` / `codex` / `opencode` / `cline`. **Additive** — never dropped; defaults to `["claude-code"]` for projects created before tool selection. |
 | `stacks` | string[] | Installed stack ids. |
 | `apps` | `{group,name,stack}[]` | Monorepo apps (deduped by `group/name`). |

@@ -25,7 +25,7 @@ import {
   type TemplateMeta,
   type TemplateRef,
 } from "../lib/templates.js";
-import { composeClaudeMd } from "../lib/claudemd.js";
+import { composeClaudeMd, type ProjectMeta } from "../lib/claudemd.js";
 import {
   composePackageJson,
   mergeFirstWins,
@@ -157,6 +157,34 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     );
   }
 
+  // Project identity — asked up front and injected into the composed
+  // instructions file (CLAUDE.md / AGENTS.md) so the agent immediately knows
+  // what the project is and the problem it solves. Pre-filled from the manifest
+  // on re-runs (a blank answer keeps the existing value).
+  const defaultName = existingManifest?.projectName || basename(targetDir);
+  const nameInput = await p.text({
+    message: "Project name?",
+    placeholder: defaultName,
+    initialValue: defaultName,
+    validate: (v) => (v.trim().length === 0 ? "Name is required" : undefined),
+  });
+  if (p.isCancel(nameInput)) return p.cancel("Cancelled.");
+  const projectName = nameInput.trim();
+
+  const briefInput = await p.text({
+    message: "Project brief? (one line — what it is and the problem it solves)",
+    placeholder: "e.g. Realtime chat app for support teams",
+    initialValue: existingManifest?.brief ?? "",
+  });
+  if (p.isCancel(briefInput)) return p.cancel("Cancelled.");
+  const brief = briefInput.trim();
+
+  const projectMeta: ProjectMeta = {
+    name: projectName,
+    brief,
+    date: new Date().toISOString().slice(0, 10),
+  };
+
   // Which agentic coding tool(s) this project targets — drives which
   // instruction file(s) and agent/skill layouts get generated. Tools are
   // additive (the manifest never drops one), so the effective set is the union
@@ -272,6 +300,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     return runMonorepoFlow({
       targetDir,
       mode,
+      meta: projectMeta,
       tools: selectedTools,
       stacks,
       databases,
@@ -441,7 +470,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     // OpenCode) — same composed content. Compose fresh, or append new sections
     // to an existing file. A newly selected tool's file is created from scratch.
     if (includeClaudeMd) {
-      const composed = await composeClaudeMd(projectType, isAdd ? mergedRefs : refs);
+      const composed = await composeClaudeMd(projectType, isAdd ? mergedRefs : refs, projectMeta);
       const blocks = await sectionBlocks(refs);
       for (const fname of instrFiles) {
         const existing = isAdd ? await readIfExists(resolve(targetDir, fname)) : null;
@@ -589,6 +618,8 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     targetDir,
     {
       projectType,
+      projectName,
+      brief,
       tools: selectedTools,
       stacks: selectedStacks,
       apps: [],
@@ -680,6 +711,7 @@ export async function mergePkgFragments(
 interface MonorepoContext {
   targetDir: string;
   mode: "new" | "existing";
+  meta: ProjectMeta;
   tools: ToolId[];
   stacks: Option[];
   databases: Option[];
@@ -881,6 +913,7 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
       targetDir,
       {
         projectName: basename(targetDir),
+        meta: ctx.meta,
         tools: ctx.tools,
         apps,
         sectionRefs,
@@ -904,7 +937,7 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
         for (const fname of instructionFiles(ctx.tools)) {
           const existing = await readIfExists(resolve(targetDir, fname));
           if (existing === null) {
-            const md = await composeMonorepoClaudeMd(mergedApps, mergedRefs);
+            const md = await composeMonorepoClaudeMd(mergedApps, mergedRefs, ctx.meta);
             if (md) merge(result, await writeFile(targetDir, fname, md, true));
           } else {
             const { content, added } = appendBlocks(existing, blocks, "\n\n");
@@ -990,6 +1023,8 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
     targetDir,
     {
       projectType: "monorepo",
+      projectName: ctx.meta.name,
+      brief: ctx.meta.brief,
       tools: ctx.tools,
       stacks: [...new Set(apps.map((a) => a.stack))],
       apps,
