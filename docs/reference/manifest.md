@@ -9,21 +9,24 @@ what's already set up — avoiding duplicate or inapplicable actions.
 ```json
 {
   "generator": "create-ai-native-project",
-  "version": "0.3.1",
-  "createdAt": "2026-07-11T00:00:00.000Z",
-  "updatedAt": "2026-07-11T00:00:00.000Z",
+  "version": "0.3.4",
+  "createdAt": "2026-07-14T00:00:00.000Z",
+  "updatedAt": "2026-07-14T00:00:00.000Z",
   "projectType": "single",
-  "tools": ["claude-code", "codex", "opencode"],
-  "stacks": ["react", "node-nest"],
+  "tools": ["claude-code", "codex", "opencode", "cline"],
+  "stacks": ["nextjs", "vercel-ai-sdk"],
   "apps": [],
   "databases": ["postgres"],
-  "storage": [],
-  "auth": ["jwt"],
+  "vectorDb": ["pgvector"],
+  "orm": ["prisma"],
+  "iac": ["opentofu"],
+  "storage": ["seaweedfs"],
+  "auth": ["better-auth"],
   "ci": ["github-actions"],
   "docker": true,
   "docs": [],
   "skills": ["engineering-standards", "knowledge-base"],
-  "agents": ["code-reviewer", "security-reviewer", "react"]
+  "agents": ["code-reviewer", "security-reviewer", "nextjs"]
 }
 ```
 
@@ -35,10 +38,10 @@ what's already set up — avoiding duplicate or inapplicable actions.
 | `version` | string | CLI version that last wrote the manifest. |
 | `createdAt` / `updatedAt` | ISO string | `createdAt` is preserved across re-runs. |
 | `projectType` | `single` \| `monorepo` \| null | **Immutable** once set. |
-| `tools` | string[] | `claude-code` / `codex` / `opencode`. **Additive** — never dropped; defaults to `["claude-code"]` for projects created before tool selection. |
+| `tools` | string[] | `claude-code` / `codex` / `opencode` / `cline`. **Additive** — never dropped; defaults to `["claude-code"]` for projects created before tool selection. |
 | `stacks` | string[] | Installed stack ids. |
 | `apps` | `{group,name,stack}[]` | Monorepo apps (deduped by `group/name`). |
-| `databases` · `storage` · `auth` · `ci` · `docs` | string[] | Installed ids per kind. |
+| `databases` · `vectorDb` · `orm` · `storage` · `auth` · `iac` · `ci` · `docs` | string[] | Installed ids per kind. `vectorDb` / `orm` / `iac` were added later and **backfill to `[]`** on older manifests. |
 | `docker` | boolean | Sticky — stays `true` once enabled. |
 | `skills` · `agents` | string[] | Installed skill/agent names (across every tool layout). |
 

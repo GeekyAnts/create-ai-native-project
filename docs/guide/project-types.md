@@ -34,7 +34,8 @@ scaffolds each under `apps/<group>/<name>/`:
 
 - Each app gets its own `package.json` (name = the app) and its stack code.
 - **Agents and skills are workspace-wide** — routed to the repo-root
-  `.claude/` / `.opencode/` / `.codex/` (per your [tools](/guide/coding-tools)).
+  `.claude/` / `.opencode/` / `.codex/` / `.clinerules/` (per your
+  [tools](/guide/coding-tools)).
 - The instructions file gets a section per app plus the workspace selections.
 - **Docker**: one build-based service per app (`build: ./apps/<group>/<name>`)
   with collision-free host ports, plus shared database/storage services.
