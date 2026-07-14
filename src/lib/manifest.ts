@@ -27,6 +27,8 @@ export interface ProjectManifest {
   stacks: string[];
   apps: AppEntry[];
   databases: string[];
+  /** Vector stores for RAG / AI-native apps (pgvector, qdrant, …). */
+  vectorDb: string[];
   storage: string[];
   auth: string[];
   ci: string[];
@@ -48,6 +50,8 @@ export async function readManifest(dir: string): Promise<ProjectManifest | null>
     if (typeof parsed !== "object" || parsed === null) return null;
     // Backward compat: projects created before tool selection were Claude Code.
     parsed.tools = normalizeTools(parsed.tools);
+    // Backward compat: the vector-db kind was added later — default to empty.
+    if (!Array.isArray(parsed.vectorDb)) parsed.vectorDb = [];
     return parsed;
   } catch {
     return null;
@@ -87,6 +91,7 @@ export async function writeManifest(
     stacks: union(prev?.stacks, next.stacks),
     apps: unionApps(prev?.apps, next.apps),
     databases: union(prev?.databases, next.databases),
+    vectorDb: union(prev?.vectorDb, next.vectorDb),
     storage: union(prev?.storage, next.storage),
     auth: union(prev?.auth, next.auth),
     ci: union(prev?.ci, next.ci),

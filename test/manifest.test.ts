@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -10,6 +10,7 @@ const state = (over: Partial<ManifestState> = {}): ManifestState => ({
   stacks: [],
   apps: [],
   databases: [],
+  vectorDb: [],
   storage: [],
   auth: [],
   ci: [],
@@ -88,6 +89,27 @@ describe("manifest", () => {
 
   it("returns null when no manifest exists", async () => {
     expect(await readManifest(dir)).toBeNull();
+  });
+
+  it("unions vectorDb selections and defaults missing vectorDb to empty", async () => {
+    await writeManifest(dir, state({ vectorDb: ["pgvector"] }), "0.4.0", "2026-07-14T00:00:00.000Z");
+    const merged = await writeManifest(
+      dir,
+      state({ vectorDb: ["qdrant"] }),
+      "0.4.0",
+      "2026-07-14T01:00:00.000Z",
+    );
+    expect(merged.vectorDb).toEqual(["pgvector", "qdrant"]);
+  });
+
+  it("backfills vectorDb=[] when reading a manifest written without it", async () => {
+    await writeFile(
+      join(dir, ".ai-native-project.json"),
+      JSON.stringify({ generator: "create-ai-native-project", projectType: "single", stacks: [] }),
+      "utf8",
+    );
+    const m = await readManifest(dir);
+    expect(m?.vectorDb).toEqual([]);
   });
 
   it("defaults tools to claude-code and unions tool selections", async () => {
