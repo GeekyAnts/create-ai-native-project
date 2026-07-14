@@ -32,6 +32,7 @@ export default defineConfig({
           collapsed: false,
           items: [
             { text: "Getting Started", link: "/guide/getting-started" },
+            { text: "Demos", link: "/guide/demos" },
             { text: "Usage & Commands", link: "/guide/usage" },
             { text: "Agentic Coding Tools", link: "/guide/coding-tools" },
             { text: "Project Types", link: "/guide/project-types" },

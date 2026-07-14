@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Demo wrapper: runs the locally-built CLI under a clean name so recordings
+# display `create-ai-native-project …` instead of `node ../dist/index.js …`.
+# Resolves the repo root from this script's own location, so it works from any CWD.
+set -euo pipefail
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+exec node "$REPO_ROOT/dist/index.js" "$@"
