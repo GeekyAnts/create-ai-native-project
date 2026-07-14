@@ -41,6 +41,7 @@ export type TemplateKind =
   | "storage"
   | "auth"
   | "security"
+  | "mcp"
   | "docker"
   | "ci"
   | "docs"
@@ -71,6 +72,7 @@ const FRAGMENT_KINDS: TemplateKind[] = [
   "storage",
   "auth",
   "security",
+  "mcp",
 ];
 
 /**
@@ -98,6 +100,8 @@ function isComposeFile(kind: TemplateKind, rel: string): boolean {
   }
   // The orm kind contributes a package.json fragment (deps merged, not copied).
   if (kind === "orm" && rel === "package.json") return true;
+  // The mcp kind's spec is read by the MCP config composer, never copied.
+  if (kind === "mcp" && rel === "mcp.json") return true;
   if (kind === "docker" && rel === "docker-compose.yml") return true;
   return false;
 }
@@ -133,6 +137,7 @@ const KIND_DIR: Record<TemplateKind, string> = {
   storage: "storage",
   auth: "auth",
   security: "security",
+  mcp: "mcp",
   docker: "docker",
   ci: "ci",
   docs: "docs",
@@ -152,6 +157,7 @@ const TARGET_ROOT: Record<TemplateKind, (id: string) => string> = {
   storage: () => "",
   auth: () => "",
   security: () => "",
+  mcp: () => "",
   docker: () => "",
   ci: () => "",
   docs: () => "docs",
@@ -267,6 +273,7 @@ export const listIac = () => listTemplates("iac");
 export const listStorage = () => listTemplates("storage");
 export const listAuth = () => listTemplates("auth");
 export const listSecurity = () => listTemplates("security");
+export const listMcp = () => listTemplates("mcp");
 export const listCi = () => listTemplates("ci");
 export const listDocs = () => listTemplates("docs");
 export const listSkills = () => listTemplates("skill");

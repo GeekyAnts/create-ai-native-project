@@ -41,6 +41,8 @@ export interface ProjectManifest {
   auth: string[];
   /** Security standards the project follows (essential, infrastructure, …). */
   security: string[];
+  /** MCP servers configured for the project (chrome-devtools, context7, …). */
+  mcp: string[];
   ci: string[];
   docker: boolean;
   docs: string[];
@@ -68,6 +70,8 @@ export async function readManifest(dir: string): Promise<ProjectManifest | null>
     if (!Array.isArray(parsed.iac)) parsed.iac = [];
     // Backward compat: the security kind was added later — default to empty.
     if (!Array.isArray(parsed.security)) parsed.security = [];
+    // Backward compat: the mcp kind was added later — default to empty.
+    if (!Array.isArray(parsed.mcp)) parsed.mcp = [];
     return parsed;
   } catch {
     return null;
@@ -116,6 +120,7 @@ export async function writeManifest(
     storage: union(prev?.storage, next.storage),
     auth: union(prev?.auth, next.auth),
     security: union(prev?.security, next.security),
+    mcp: union(prev?.mcp, next.mcp),
     ci: union(prev?.ci, next.ci),
     docker: next.docker || Boolean(prev?.docker),
     docs: union(prev?.docs, next.docs),

@@ -131,6 +131,36 @@ Optionally scaffold a self-contained docs site into `docs/` — choose
 **Docusaurus**, **Fumadocs** (Next.js), or **Starlight** (Astro). Each is its own
 sub-project — its `package.json` is copied, not merged into your root.
 
+## MCP servers
+
+[Model Context Protocol](https://modelcontextprotocol.io) servers are the
+external tools your agent can call. Pick from a curated, developer-focused set:
+
+| Server | What it gives the agent | Runs via |
+| --- | --- | --- |
+| **Chrome DevTools** | Drive a real Chrome — DOM, console, network, performance, screenshots | `npx chrome-devtools-mcp` (no key) |
+| **Playwright** | Drive a browser (Chromium/Firefox/WebKit) for e2e checks | `npx @playwright/mcp` (no key) |
+| **Context7** | Up-to-date, version-specific library docs pulled into context | remote HTTP (optional key) |
+| **GitHub** | Repos, issues, PRs, code search, Actions | remote HTTP (OAuth) |
+| **Filesystem** | Structured file read/search/edit scoped to the project | `npx …/server-filesystem` (no key) |
+| **Git** | Local Git ops (status, diff, log, blame, commit) | `uvx mcp-server-git` (needs uv) |
+| **Fetch** | Fetch a URL → clean Markdown | `uvx mcp-server-fetch` (needs uv) |
+| **Sequential Thinking** | Structured, revisable step-by-step reasoning | `npx …/server-sequential-thinking` (no key) |
+| **Memory** | Persistent knowledge-graph memory | `npx …/server-memory` (no key) |
+
+Each selection is written to **every selected tool's own MCP config**, merged in
+so servers you already have are never overwritten:
+
+- **Claude Code** → `.mcp.json` (`mcpServers`)
+- **OpenCode** → the `mcp` block of `opencode.json`
+- **Codex** → `.codex/config.toml` (`[mcp_servers.*]`)
+- **Cline** → not written (Cline's MCP settings live in IDE storage, not a
+  project file) — add these from Cline's MCP panel.
+
+A short section per server is also appended to your instructions file. Servers
+that need a key or runtime (Context7, GitHub, Git, Fetch) say so in that section;
+the configs are written so the zero-config ones run as-is.
+
 ## The core set
 
 Installed on **every** project regardless of selections (and hidden from the

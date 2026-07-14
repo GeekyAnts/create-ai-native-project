@@ -46,6 +46,7 @@ target (new / existing / --boot)
   → project type             (single / monorepo)
   → tech stack(s)
   → database(s) · vector-db · ORM · storage · auth · IaC · security standard(s)
+  → MCP server(s)            (chrome-devtools, context7, playwright, github, …)
   → skills · agents
   → docs folder?  (Docusaurus / Fumadocs / Starlight)
   → CI?           (GitHub Actions / GitLab CI)
@@ -71,6 +72,11 @@ pickers, and the fixed **project type** is reused without asking again.
   (OWASP, NIST, CIS, SLSA, ISO, …) to concrete guidance. Picking any group also
   installs the `security-standards` skill and the `threat-modeler` +
   `security-auditor` agents.
+- **MCP servers** — pick from a curated set (Chrome DevTools, Playwright,
+  Context7, GitHub, Filesystem, Git, Fetch, Sequential Thinking, Memory). The CLI
+  writes each selected tool's own MCP config — `.mcp.json` (Claude Code), the
+  `mcp` block of `opencode.json` (OpenCode), `.codex/config.toml` (Codex) — and
+  appends a short section per server. See [MCP Servers](/guide/stacks#mcp-servers).
 - **Skills & agents** in each selected tool's layout
   (see [Agentic Coding Tools](/guide/coding-tools)).
 - A runnable **`package.json`** (project-type base + stack + ORM fragments, merged).

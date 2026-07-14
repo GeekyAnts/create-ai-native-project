@@ -25,6 +25,7 @@ what's already set up — avoiding duplicate or inapplicable actions.
   "storage": ["seaweedfs"],
   "auth": ["better-auth"],
   "security": ["essential", "supply-chain"],
+  "mcp": ["chrome-devtools", "context7"],
   "ci": ["github-actions"],
   "docker": true,
   "docs": [],
@@ -45,8 +46,9 @@ what's already set up — avoiding duplicate or inapplicable actions.
 | `tools` | string[] | `claude-code` / `codex` / `opencode` / `cline`. **Additive** — never dropped; defaults to `["claude-code"]` for projects created before tool selection. |
 | `stacks` | string[] | Installed stack ids. |
 | `apps` | `{group,name,stack}[]` | Monorepo apps (deduped by `group/name`). |
-| `databases` · `vectorDb` · `orm` · `storage` · `auth` · `iac` · `security` · `ci` · `docs` | string[] | Installed ids per kind. `vectorDb` / `orm` / `iac` / `security` were added later and **backfill to `[]`** on older manifests. |
+| `databases` · `vectorDb` · `orm` · `storage` · `auth` · `iac` · `security` · `mcp` · `ci` · `docs` | string[] | Installed ids per kind. `vectorDb` / `orm` / `iac` / `security` / `mcp` were added later and **backfill to `[]`** on older manifests. |
 | `security` | string[] | Security-standard priority groups the project follows (`essential`, `infrastructure`, `governance`, `testing-validation`, `identity-access`, `supply-chain`, `industry-compliance`). Picking any group auto-installs the `security-standards` skill + `threat-modeler` / `security-auditor` agents. |
+| `mcp` | string[] | MCP servers configured for the project (`chrome-devtools`, `playwright`, `context7`, `github`, `filesystem`, `git`, `fetch`, `sequential-thinking`, `memory`). Each is written to every selected tool's MCP config — see [MCP Servers](/guide/stacks#mcp-servers). |
 | `docker` | boolean | Sticky — stays `true` once enabled. |
 | `skills` · `agents` | string[] | Installed skill/agent names (across every tool layout). |
 

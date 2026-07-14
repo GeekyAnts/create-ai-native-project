@@ -6,7 +6,6 @@ import { writeTemplateFiles, type WriteResult } from "./files.js";
 import { readCiComposeConfig, type ComposedFile } from "./ci.js";
 import {
   instructionFiles,
-  opencodeConfig,
   retargetForTools,
   type ToolId,
 } from "./tools.js";
@@ -284,10 +283,9 @@ export async function scaffoldMonorepo(
   for (const id of plan.skills) mergeWR(result, await writeTemplateFiles(targetDir, retargetForTools(await fetchTemplate("skill", id), plan.tools), { overwrite }));
   for (const id of plan.agents) mergeWR(result, await writeTemplateFiles(targetDir, retargetForTools(await fetchTemplate("agent", id), plan.tools), { overwrite }));
 
-  // opencode.json marks the workspace as OpenCode-aware (skip-if-exists on add).
-  if (plan.tools.includes("opencode")) {
-    mergeWR(result, await writeTemplateFiles(targetDir, [{ path: "opencode.json", contents: opencodeConfig() }], { overwrite }));
-  }
+  // Note: opencode.json (OpenCode-aware marker + `mcp` block) is written by the
+  // MCP config phase in the create flow — the single writer for both new and
+  // add runs — so it isn't emitted here.
 
   return result;
 }
