@@ -12,6 +12,7 @@ const state = (over: Partial<ManifestState> = {}): ManifestState => ({
   databases: [],
   vectorDb: [],
   orm: [],
+  iac: [],
   storage: [],
   auth: [],
   ci: [],
@@ -123,6 +124,18 @@ describe("manifest", () => {
       "utf8",
     );
     expect((await readManifest(dir))?.orm).toEqual([]);
+  });
+
+  it("unions iac selections and backfills iac=[] for older manifests", async () => {
+    await writeManifest(dir, state({ iac: ["opentofu"] }), "0.6.0", "2026-07-14T00:00:00.000Z");
+    const merged = await writeManifest(dir, state({ iac: ["terraform"] }), "0.6.0", "2026-07-14T01:00:00.000Z");
+    expect(merged.iac).toEqual(["opentofu", "terraform"]);
+    await writeFile(
+      join(dir, ".ai-native-project.json"),
+      JSON.stringify({ generator: "create-ai-native-project", projectType: "single", stacks: [] }),
+      "utf8",
+    );
+    expect((await readManifest(dir))?.iac).toEqual([]);
   });
 
   it("defaults tools to claude-code and unions tool selections", async () => {

@@ -37,6 +37,7 @@ export type TemplateKind =
   | "database"
   | "vector-db"
   | "orm"
+  | "iac"
   | "storage"
   | "auth"
   | "docker"
@@ -65,6 +66,7 @@ const FRAGMENT_KINDS: TemplateKind[] = [
   "database",
   "vector-db",
   "orm",
+  "iac",
   "storage",
   "auth",
 ];
@@ -125,6 +127,7 @@ const KIND_DIR: Record<TemplateKind, string> = {
   database: "databases",
   "vector-db": "vector-db",
   orm: "orm",
+  iac: "iac",
   storage: "storage",
   auth: "auth",
   docker: "docker",
@@ -142,6 +145,7 @@ const TARGET_ROOT: Record<TemplateKind, (id: string) => string> = {
   database: () => "",
   "vector-db": () => "",
   orm: () => "",
+  iac: () => "",
   storage: () => "",
   auth: () => "",
   docker: () => "",
@@ -255,6 +259,7 @@ export const listStacks = () => listTemplates("stack");
 export const listDatabases = () => listTemplates("database");
 export const listVectorDb = () => listTemplates("vector-db");
 export const listOrm = () => listTemplates("orm");
+export const listIac = () => listTemplates("iac");
 export const listStorage = () => listTemplates("storage");
 export const listAuth = () => listTemplates("auth");
 export const listCi = () => listTemplates("ci");
