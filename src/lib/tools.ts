@@ -15,10 +15,15 @@
  *
  * SKILL.md is byte-identical across all three tools, so skills are pure file
  * placement. Subagents need real translation (frontmatter differs per tool).
+ *
+ * Cline is a fourth target: it reads AGENTS.md (instructions, free) and takes
+ * each skill's SKILL.md as a `.clinerules/workflows/<n>.md` file (Cline turns
+ * those into `/<n>` slash commands). Cline has no per-file subagent format
+ * (its "modes" are UI/settings-level), so subagents are skipped for Cline.
  */
 import type { TemplateFile } from "./templates.js";
 
-export type ToolId = "claude-code" | "codex" | "opencode";
+export type ToolId = "claude-code" | "codex" | "opencode" | "cline";
 
 export interface ToolMeta {
   id: ToolId;
@@ -31,6 +36,7 @@ export const AGENTIC_TOOLS: ToolMeta[] = [
   { id: "claude-code", label: "Claude Code", hint: "CLAUDE.md + .claude/{skills,agents}" },
   { id: "codex", label: "OpenAI Codex", hint: "AGENTS.md + .agents/skills + .codex/agents (TOML)" },
   { id: "opencode", label: "OpenCode", hint: "AGENTS.md + .opencode/agents + opencode.json" },
+  { id: "cline", label: "Cline", hint: "AGENTS.md + .clinerules/workflows (skills as slash commands)" },
 ];
 
 const TOOL_IDS = new Set<string>(AGENTIC_TOOLS.map((t) => t.id));
@@ -52,7 +58,10 @@ export function normalizeTools(input: readonly string[] | undefined | null): Too
 export function instructionFiles(tools: readonly ToolId[]): string[] {
   const files: string[] = [];
   if (tools.includes("claude-code")) files.push("CLAUDE.md");
-  if (tools.includes("codex") || tools.includes("opencode")) files.push("AGENTS.md");
+  // Codex, OpenCode, and Cline all read AGENTS.md.
+  if (tools.includes("codex") || tools.includes("opencode") || tools.includes("cline")) {
+    files.push("AGENTS.md");
+  }
   return files.length > 0 ? files : ["CLAUDE.md"];
 }
 
@@ -266,6 +275,11 @@ export function retargetForTools(
       const [, skillName, rest] = skillMatch;
       for (const base of skillDirs) {
         out.push({ path: `${base}/${skillName}/${rest}`, contents: file.contents });
+      }
+      // Cline: a skill's SKILL.md becomes a `.clinerules/workflows/<n>.md`
+      // file, which Cline exposes as the `/<n>` slash command.
+      if (tools.includes("cline") && rest === "SKILL.md") {
+        out.push({ path: `.clinerules/workflows/${skillName}.md`, contents: file.contents });
       }
       continue;
     }
