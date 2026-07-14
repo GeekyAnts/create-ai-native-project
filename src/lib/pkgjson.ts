@@ -46,7 +46,7 @@ export function toPackageName(name: string): string {
 }
 
 export async function readPkgFragment(
-  kind: "project-type" | "stack",
+  kind: "project-type" | "stack" | "orm",
   id: string,
 ): Promise<Json | null> {
   const raw = await readTemplateFile(kind, id, "package.json");
@@ -70,6 +70,7 @@ export async function composePackageJson(
   projectName: string,
   projectTypeId: string | null,
   stackIds: string[],
+  ormIds: string[] = [],
 ): Promise<string | null> {
   let result: Json = {};
   let found = false;
@@ -83,6 +84,14 @@ export async function composePackageJson(
   }
   for (const id of stackIds) {
     const frag = await readPkgFragment("stack", id);
+    if (frag) {
+      result = mergeFirstWins(result, frag);
+      found = true;
+    }
+  }
+  // ORM fragments contribute deps/scripts (merged first-wins, like stacks).
+  for (const id of ormIds) {
+    const frag = await readPkgFragment("orm", id);
     if (frag) {
       result = mergeFirstWins(result, frag);
       found = true;

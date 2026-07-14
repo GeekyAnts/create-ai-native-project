@@ -8,6 +8,7 @@ import {
   listCi,
   listDatabases,
   listVectorDb,
+  listOrm,
   listDocs,
   listProjectTypes,
   listSkills,
@@ -84,6 +85,7 @@ type CopyKind =
   | "stack"
   | "database"
   | "vector-db"
+  | "orm"
   | "storage"
   | "auth"
   | "docker"
@@ -159,6 +161,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   let stacks: Option[] = [];
   let databases: Option[] = [];
   let vectorDb: Option[] = [];
+  let orm: Option[] = [];
   let storage: Option[] = [];
   let authOptions: Option[] = [];
   let ciOptions: Option[] = [];
@@ -168,12 +171,13 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   let dockerBaseId: string | null = null;
   let core: CoreSet = { skills: [], agents: [] };
   try {
-    const [pts, sts, dbs, vdb, sto, auth, ci, dockers, docs, sk, ag, coreSet] =
+    const [pts, sts, dbs, vdb, ormList, sto, auth, ci, dockers, docs, sk, ag, coreSet] =
       await Promise.all([
         listProjectTypes(),
         listStacks(),
         listDatabases(),
         listVectorDb(),
+        listOrm(),
         listStorage(),
         listAuth(),
         listCi(),
@@ -188,6 +192,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     stacks = toOptions(sts);
     databases = toOptions(dbs);
     vectorDb = toOptions(vdb);
+    orm = toOptions(ormList);
     storage = toOptions(sto);
     authOptions = toOptions(auth);
     ciOptions = toOptions(ci);
@@ -218,6 +223,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     }
     databases = databases.filter(has(existingManifest.databases));
     vectorDb = vectorDb.filter(has(existingManifest.vectorDb));
+    orm = orm.filter(has(existingManifest.orm));
     storage = storage.filter(has(existingManifest.storage));
     authOptions = authOptions.filter(has(existingManifest.auth));
     ciOptions = ciOptions.filter(has(existingManifest.ci));
@@ -269,6 +275,8 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   if (selectedDatabases === null) return p.cancel("Cancelled.");
   const selectedVectorDb = await pickMany("vector store(s)", vectorDb, false);
   if (selectedVectorDb === null) return p.cancel("Cancelled.");
+  const selectedOrm = await pickMany("ORM(s)", orm, false);
+  if (selectedOrm === null) return p.cancel("Cancelled.");
   const selectedStorage = await pickMany("storage option(s)", storage, false);
   if (selectedStorage === null) return p.cancel("Cancelled.");
   const selectedAuth = await pickMany("auth option(s)", authOptions, false);
@@ -372,6 +380,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     ...selectedStacks.map((id) => ({ kind: "stack" as const, id })),
     ...selectedDatabases.map((id) => ({ kind: "database" as const, id })),
     ...selectedVectorDb.map((id) => ({ kind: "vector-db" as const, id })),
+    ...selectedOrm.map((id) => ({ kind: "orm" as const, id })),
     ...selectedStorage.map((id) => ({ kind: "storage" as const, id })),
     ...selectedAuth.map((id) => ({ kind: "auth" as const, id })),
   ];
@@ -384,10 +393,12 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   // Merged state = what the project already has + this run's selections; used
   // when composing a file from scratch on an add run.
   const mergedStacks = unionStr(existingManifest?.stacks ?? [], selectedStacks);
+  const mergedOrm = unionStr(existingManifest?.orm ?? [], selectedOrm);
   const mergedRefs: TemplateRef[] = [
     ...mergedStacks.map((id) => ({ kind: "stack" as const, id })),
     ...unionStr(existingManifest?.databases ?? [], selectedDatabases).map((id) => ({ kind: "database" as const, id })),
     ...unionStr(existingManifest?.vectorDb ?? [], selectedVectorDb).map((id) => ({ kind: "vector-db" as const, id })),
+    ...mergedOrm.map((id) => ({ kind: "orm" as const, id })),
     ...unionStr(existingManifest?.storage ?? [], selectedStorage).map((id) => ({ kind: "storage" as const, id })),
     ...unionStr(existingManifest?.auth ?? [], selectedAuth).map((id) => ({ kind: "auth" as const, id })),
   ];
@@ -420,10 +431,11 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
         basename(targetDir),
         projectType,
         isAdd ? mergedStacks : selectedStacks,
+        isAdd ? mergedOrm : selectedOrm,
       );
       if (pkgJson) merge(result, await writeFile(targetDir, "package.json", pkgJson, overwrite));
     } else {
-      const updated = await mergePkgFragments(existingPkgRaw, selectedStacks);
+      const updated = await mergePkgFragments(existingPkgRaw, selectedStacks, selectedOrm);
       if (updated !== null) merge(result, await writeFile(targetDir, "package.json", updated, true));
     }
 
@@ -445,6 +457,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     for (const id of selectedStacks) merge(result, await copy("stack", id, targetDir, overwrite, selectedTools));
     for (const id of selectedDatabases) merge(result, await copy("database", id, targetDir, overwrite, selectedTools));
     for (const id of selectedVectorDb) merge(result, await copy("vector-db", id, targetDir, overwrite, selectedTools));
+    for (const id of selectedOrm) merge(result, await copy("orm", id, targetDir, overwrite, selectedTools));
     for (const id of selectedStorage) merge(result, await copy("storage", id, targetDir, overwrite, selectedTools));
     for (const id of selectedAuth) merge(result, await copy("auth", id, targetDir, overwrite, selectedTools));
 
@@ -546,6 +559,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
       apps: [],
       databases: selectedDatabases,
       vectorDb: selectedVectorDb,
+      orm: selectedOrm,
       storage: selectedStorage,
       auth: selectedAuth,
       ci: selectedCi,
@@ -604,6 +618,7 @@ export async function fragmentBlocks(refs: TemplateRef[], file: string): Promise
 export async function mergePkgFragments(
   existingRaw: string,
   stackIds: string[],
+  ormIds: string[] = [],
 ): Promise<string | null> {
   let pkg: Json;
   try {
@@ -614,6 +629,10 @@ export async function mergePkgFragments(
   let merged = pkg;
   for (const id of stackIds) {
     const frag = await readPkgFragment("stack", id);
+    if (frag) merged = mergeFirstWins(merged, frag);
+  }
+  for (const id of ormIds) {
+    const frag = await readPkgFragment("orm", id);
     if (frag) merged = mergeFirstWins(merged, frag);
   }
   const next = JSON.stringify(merged, null, 2) + "\n";
@@ -931,6 +950,7 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
       apps,
       databases: selectedDatabases,
       vectorDb: selectedVectorDb,
+      orm: [],
       storage: selectedStorage,
       auth: selectedAuth,
       ci: selectedCi,
