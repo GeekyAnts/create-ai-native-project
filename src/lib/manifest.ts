@@ -29,6 +29,8 @@ export interface ProjectManifest {
   databases: string[];
   /** Vector stores for RAG / AI-native apps (pgvector, qdrant, …). */
   vectorDb: string[];
+  /** ORMs / data layers (prisma, drizzle). */
+  orm: string[];
   storage: string[];
   auth: string[];
   ci: string[];
@@ -52,6 +54,8 @@ export async function readManifest(dir: string): Promise<ProjectManifest | null>
     parsed.tools = normalizeTools(parsed.tools);
     // Backward compat: the vector-db kind was added later — default to empty.
     if (!Array.isArray(parsed.vectorDb)) parsed.vectorDb = [];
+    // Backward compat: the orm kind was added later — default to empty.
+    if (!Array.isArray(parsed.orm)) parsed.orm = [];
     return parsed;
   } catch {
     return null;
@@ -92,6 +96,7 @@ export async function writeManifest(
     apps: unionApps(prev?.apps, next.apps),
     databases: union(prev?.databases, next.databases),
     vectorDb: union(prev?.vectorDb, next.vectorDb),
+    orm: union(prev?.orm, next.orm),
     storage: union(prev?.storage, next.storage),
     auth: union(prev?.auth, next.auth),
     ci: union(prev?.ci, next.ci),

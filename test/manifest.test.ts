@@ -11,6 +11,7 @@ const state = (over: Partial<ManifestState> = {}): ManifestState => ({
   apps: [],
   databases: [],
   vectorDb: [],
+  orm: [],
   storage: [],
   auth: [],
   ci: [],
@@ -110,6 +111,18 @@ describe("manifest", () => {
     );
     const m = await readManifest(dir);
     expect(m?.vectorDb).toEqual([]);
+  });
+
+  it("unions orm selections and backfills orm=[] for older manifests", async () => {
+    await writeManifest(dir, state({ orm: ["prisma"] }), "0.5.0", "2026-07-14T00:00:00.000Z");
+    const merged = await writeManifest(dir, state({ orm: ["drizzle"] }), "0.5.0", "2026-07-14T01:00:00.000Z");
+    expect(merged.orm).toEqual(["prisma", "drizzle"]);
+    await writeFile(
+      join(dir, ".ai-native-project.json"),
+      JSON.stringify({ generator: "create-ai-native-project", projectType: "single", stacks: [] }),
+      "utf8",
+    );
+    expect((await readManifest(dir))?.orm).toEqual([]);
   });
 
   it("defaults tools to claude-code and unions tool selections", async () => {

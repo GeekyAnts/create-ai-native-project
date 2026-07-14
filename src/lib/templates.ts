@@ -36,6 +36,7 @@ export type TemplateKind =
   | "stack"
   | "database"
   | "vector-db"
+  | "orm"
   | "storage"
   | "auth"
   | "docker"
@@ -63,6 +64,7 @@ const FRAGMENT_KINDS: TemplateKind[] = [
   "stack",
   "database",
   "vector-db",
+  "orm",
   "storage",
   "auth",
 ];
@@ -90,6 +92,8 @@ function isComposeFile(kind: TemplateKind, rel: string): boolean {
   if (kind === "project-type" || kind === "stack") {
     if (rel === "CLAUDE.md" || rel === "package.json") return true;
   }
+  // The orm kind contributes a package.json fragment (deps merged, not copied).
+  if (kind === "orm" && rel === "package.json") return true;
   if (kind === "docker" && rel === "docker-compose.yml") return true;
   return false;
 }
@@ -120,6 +124,7 @@ const KIND_DIR: Record<TemplateKind, string> = {
   stack: "stacks",
   database: "databases",
   "vector-db": "vector-db",
+  orm: "orm",
   storage: "storage",
   auth: "auth",
   docker: "docker",
@@ -136,6 +141,7 @@ const TARGET_ROOT: Record<TemplateKind, (id: string) => string> = {
   stack: () => "",
   database: () => "",
   "vector-db": () => "",
+  orm: () => "",
   storage: () => "",
   auth: () => "",
   docker: () => "",
@@ -248,6 +254,7 @@ export const listProjectTypes = () => listTemplates("project-type");
 export const listStacks = () => listTemplates("stack");
 export const listDatabases = () => listTemplates("database");
 export const listVectorDb = () => listTemplates("vector-db");
+export const listOrm = () => listTemplates("orm");
 export const listStorage = () => listTemplates("storage");
 export const listAuth = () => listTemplates("auth");
 export const listCi = () => listTemplates("ci");
