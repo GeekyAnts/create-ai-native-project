@@ -22,11 +22,12 @@ what's already set up — avoiding duplicate or inapplicable actions.
   "iac": ["opentofu"],
   "storage": ["seaweedfs"],
   "auth": ["better-auth"],
+  "security": ["essential", "supply-chain"],
   "ci": ["github-actions"],
   "docker": true,
   "docs": [],
-  "skills": ["engineering-standards", "knowledge-base"],
-  "agents": ["code-reviewer", "security-reviewer", "nextjs"]
+  "skills": ["engineering-standards", "knowledge-base", "security-standards"],
+  "agents": ["code-reviewer", "security-reviewer", "threat-modeler", "security-auditor", "nextjs"]
 }
 ```
 
@@ -41,7 +42,8 @@ what's already set up — avoiding duplicate or inapplicable actions.
 | `tools` | string[] | `claude-code` / `codex` / `opencode` / `cline`. **Additive** — never dropped; defaults to `["claude-code"]` for projects created before tool selection. |
 | `stacks` | string[] | Installed stack ids. |
 | `apps` | `{group,name,stack}[]` | Monorepo apps (deduped by `group/name`). |
-| `databases` · `vectorDb` · `orm` · `storage` · `auth` · `iac` · `ci` · `docs` | string[] | Installed ids per kind. `vectorDb` / `orm` / `iac` were added later and **backfill to `[]`** on older manifests. |
+| `databases` · `vectorDb` · `orm` · `storage` · `auth` · `iac` · `security` · `ci` · `docs` | string[] | Installed ids per kind. `vectorDb` / `orm` / `iac` / `security` were added later and **backfill to `[]`** on older manifests. |
+| `security` | string[] | Security-standard priority groups the project follows (`essential`, `infrastructure`, `governance`, `testing-validation`, `identity-access`, `supply-chain`, `industry-compliance`). Picking any group auto-installs the `security-standards` skill + `threat-modeler` / `security-auditor` agents. |
 | `docker` | boolean | Sticky — stays `true` once enabled. |
 | `skills` · `agents` | string[] | Installed skill/agent names (across every tool layout). |
 

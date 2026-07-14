@@ -44,7 +44,7 @@ target (new / existing / --boot)
   → agentic coding tool(s)   (Claude Code / Codex / OpenCode / Cline)
   → project type             (single / monorepo)
   → tech stack(s)
-  → database(s) · vector-db · ORM · storage · auth · IaC
+  → database(s) · vector-db · ORM · storage · auth · IaC · security standard(s)
   → skills · agents
   → docs folder?  (Docusaurus / Fumadocs / Starlight)
   → CI?           (GitHub Actions / GitLab CI)
@@ -60,8 +60,14 @@ pickers, and the fixed **project type** is reused without asking again.
 ## What gets generated
 
 - An **instructions file** — `CLAUDE.md` and/or `AGENTS.md`, composed from the
-  project-type base plus a section per stack/database/vector-db/storage/auth/IaC
-  selection.
+  project-type base plus a section per stack/database/vector-db/storage/auth/IaC/
+  security selection.
+- **Security standards** — pick from 7 priority groups (Essential, Infrastructure,
+  Enterprise Governance, Testing & Validation, Identity & Access, Supply Chain,
+  Industry Compliance); each appends a `## Security:` section mapping its standards
+  (OWASP, NIST, CIS, SLSA, ISO, …) to concrete guidance. Picking any group also
+  installs the `security-standards` skill and the `threat-modeler` +
+  `security-auditor` agents.
 - **Skills & agents** in each selected tool's layout
   (see [Agentic Coding Tools](/guide/coding-tools)).
 - A runnable **`package.json`** (project-type base + stack + ORM fragments, merged).
