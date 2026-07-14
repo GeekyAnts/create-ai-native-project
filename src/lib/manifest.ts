@@ -31,6 +31,8 @@ export interface ProjectManifest {
   vectorDb: string[];
   /** ORMs / data layers (prisma, drizzle). */
   orm: string[];
+  /** Infrastructure-as-code (opentofu, …). */
+  iac: string[];
   storage: string[];
   auth: string[];
   ci: string[];
@@ -56,6 +58,8 @@ export async function readManifest(dir: string): Promise<ProjectManifest | null>
     if (!Array.isArray(parsed.vectorDb)) parsed.vectorDb = [];
     // Backward compat: the orm kind was added later — default to empty.
     if (!Array.isArray(parsed.orm)) parsed.orm = [];
+    // Backward compat: the iac kind was added later — default to empty.
+    if (!Array.isArray(parsed.iac)) parsed.iac = [];
     return parsed;
   } catch {
     return null;
@@ -97,6 +101,7 @@ export async function writeManifest(
     databases: union(prev?.databases, next.databases),
     vectorDb: union(prev?.vectorDb, next.vectorDb),
     orm: union(prev?.orm, next.orm),
+    iac: union(prev?.iac, next.iac),
     storage: union(prev?.storage, next.storage),
     auth: union(prev?.auth, next.auth),
     ci: union(prev?.ci, next.ci),
