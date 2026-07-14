@@ -7,6 +7,7 @@ import {
   listAuth,
   listCi,
   listDatabases,
+  listVectorDb,
   listDocs,
   listProjectTypes,
   listSkills,
@@ -82,6 +83,7 @@ type CopyKind =
   | "project-type"
   | "stack"
   | "database"
+  | "vector-db"
   | "storage"
   | "auth"
   | "docker"
@@ -156,6 +158,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   let projectTypes: Option[] = [];
   let stacks: Option[] = [];
   let databases: Option[] = [];
+  let vectorDb: Option[] = [];
   let storage: Option[] = [];
   let authOptions: Option[] = [];
   let ciOptions: Option[] = [];
@@ -165,11 +168,12 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   let dockerBaseId: string | null = null;
   let core: CoreSet = { skills: [], agents: [] };
   try {
-    const [pts, sts, dbs, sto, auth, ci, dockers, docs, sk, ag, coreSet] =
+    const [pts, sts, dbs, vdb, sto, auth, ci, dockers, docs, sk, ag, coreSet] =
       await Promise.all([
         listProjectTypes(),
         listStacks(),
         listDatabases(),
+        listVectorDb(),
         listStorage(),
         listAuth(),
         listCi(),
@@ -183,6 +187,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     projectTypes = toOptions(pts);
     stacks = toOptions(sts);
     databases = toOptions(dbs);
+    vectorDb = toOptions(vdb);
     storage = toOptions(sto);
     authOptions = toOptions(auth);
     ciOptions = toOptions(ci);
@@ -212,6 +217,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
       stacks = stacks.filter(has(existingManifest.stacks));
     }
     databases = databases.filter(has(existingManifest.databases));
+    vectorDb = vectorDb.filter(has(existingManifest.vectorDb));
     storage = storage.filter(has(existingManifest.storage));
     authOptions = authOptions.filter(has(existingManifest.auth));
     ciOptions = ciOptions.filter(has(existingManifest.ci));
@@ -242,6 +248,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
       tools: selectedTools,
       stacks,
       databases,
+      vectorDb,
       storage,
       authOptions,
       ciOptions,
@@ -260,6 +267,8 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   if (selectedStacks === null) return p.cancel("Cancelled.");
   const selectedDatabases = await pickMany("database(s)", databases, false);
   if (selectedDatabases === null) return p.cancel("Cancelled.");
+  const selectedVectorDb = await pickMany("vector store(s)", vectorDb, false);
+  if (selectedVectorDb === null) return p.cancel("Cancelled.");
   const selectedStorage = await pickMany("storage option(s)", storage, false);
   if (selectedStorage === null) return p.cancel("Cancelled.");
   const selectedAuth = await pickMany("auth option(s)", authOptions, false);
@@ -329,7 +338,11 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   let wantDocker = false;
   if (existingManifest?.docker) {
     const hasNew =
-      selectedStacks.length + selectedDatabases.length + selectedStorage.length > 0;
+      selectedStacks.length +
+        selectedDatabases.length +
+        selectedVectorDb.length +
+        selectedStorage.length >
+      0;
     if (hasNew) {
       const res = await p.confirm({
         message: "Update docker-compose.yml with services for the new selections?",
@@ -358,6 +371,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   const refs: TemplateRef[] = [
     ...selectedStacks.map((id) => ({ kind: "stack" as const, id })),
     ...selectedDatabases.map((id) => ({ kind: "database" as const, id })),
+    ...selectedVectorDb.map((id) => ({ kind: "vector-db" as const, id })),
     ...selectedStorage.map((id) => ({ kind: "storage" as const, id })),
     ...selectedAuth.map((id) => ({ kind: "auth" as const, id })),
   ];
@@ -373,6 +387,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
   const mergedRefs: TemplateRef[] = [
     ...mergedStacks.map((id) => ({ kind: "stack" as const, id })),
     ...unionStr(existingManifest?.databases ?? [], selectedDatabases).map((id) => ({ kind: "database" as const, id })),
+    ...unionStr(existingManifest?.vectorDb ?? [], selectedVectorDb).map((id) => ({ kind: "vector-db" as const, id })),
     ...unionStr(existingManifest?.storage ?? [], selectedStorage).map((id) => ({ kind: "storage" as const, id })),
     ...unionStr(existingManifest?.auth ?? [], selectedAuth).map((id) => ({ kind: "auth" as const, id })),
   ];
@@ -429,6 +444,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     if (projectType) merge(result, await copy("project-type", projectType, targetDir, overwrite, selectedTools));
     for (const id of selectedStacks) merge(result, await copy("stack", id, targetDir, overwrite, selectedTools));
     for (const id of selectedDatabases) merge(result, await copy("database", id, targetDir, overwrite, selectedTools));
+    for (const id of selectedVectorDb) merge(result, await copy("vector-db", id, targetDir, overwrite, selectedTools));
     for (const id of selectedStorage) merge(result, await copy("storage", id, targetDir, overwrite, selectedTools));
     for (const id of selectedAuth) merge(result, await copy("auth", id, targetDir, overwrite, selectedTools));
 
@@ -529,6 +545,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
       stacks: selectedStacks,
       apps: [],
       databases: selectedDatabases,
+      vectorDb: selectedVectorDb,
       storage: selectedStorage,
       auth: selectedAuth,
       ci: selectedCi,
@@ -610,6 +627,7 @@ interface MonorepoContext {
   tools: ToolId[];
   stacks: Option[];
   databases: Option[];
+  vectorDb: Option[];
   storage: Option[];
   authOptions: Option[];
   ciOptions: Option[];
@@ -688,6 +706,8 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
   // Workspace-level selections.
   const selectedDatabases = await pickMany("database(s)", ctx.databases, false);
   if (selectedDatabases === null) return p.cancel("Cancelled.");
+  const selectedVectorDb = await pickMany("vector store(s)", ctx.vectorDb, false);
+  if (selectedVectorDb === null) return p.cancel("Cancelled.");
   const selectedStorage = await pickMany("storage option(s)", ctx.storage, false);
   if (selectedStorage === null) return p.cancel("Cancelled.");
   const selectedAuth = await pickMany("auth option(s)", ctx.authOptions, false);
@@ -742,7 +762,12 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
   // already set up, offer to extend docker-compose.yml.
   let wantDocker = false;
   if (ctx.existingManifest?.docker) {
-    const hasNew = apps.length + selectedDatabases.length + selectedStorage.length > 0;
+    const hasNew =
+      apps.length +
+        selectedDatabases.length +
+        selectedVectorDb.length +
+        selectedStorage.length >
+      0;
     if (hasNew) {
       const res = await p.confirm({
         message: "Update docker-compose.yml with services for the new apps/selections?",
@@ -765,6 +790,7 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
 
   const sectionRefs: TemplateRef[] = [
     ...selectedDatabases.map((id) => ({ kind: "database" as const, id })),
+    ...selectedVectorDb.map((id) => ({ kind: "vector-db" as const, id })),
     ...selectedStorage.map((id) => ({ kind: "storage" as const, id })),
     ...selectedAuth.map((id) => ({ kind: "auth" as const, id })),
   ];
@@ -776,6 +802,7 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
   const mergedApps = [...existingApps, ...apps];
   const mergedRefs: TemplateRef[] = [
     ...unionStr(ctx.existingManifest?.databases ?? [], selectedDatabases).map((id) => ({ kind: "database" as const, id })),
+    ...unionStr(ctx.existingManifest?.vectorDb ?? [], selectedVectorDb).map((id) => ({ kind: "vector-db" as const, id })),
     ...unionStr(ctx.existingManifest?.storage ?? [], selectedStorage).map((id) => ({ kind: "storage" as const, id })),
     ...unionStr(ctx.existingManifest?.auth ?? [], selectedAuth).map((id) => ({ kind: "auth" as const, id })),
   ];
@@ -903,6 +930,7 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
       stacks: [...new Set(apps.map((a) => a.stack))],
       apps,
       databases: selectedDatabases,
+      vectorDb: selectedVectorDb,
       storage: selectedStorage,
       auth: selectedAuth,
       ci: selectedCi,

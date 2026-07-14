@@ -35,6 +35,7 @@ export type TemplateKind =
   | "project-type"
   | "stack"
   | "database"
+  | "vector-db"
   | "storage"
   | "auth"
   | "docker"
@@ -61,6 +62,7 @@ const FRAGMENT_KINDS: TemplateKind[] = [
   "project-type",
   "stack",
   "database",
+  "vector-db",
   "storage",
   "auth",
 ];
@@ -117,6 +119,7 @@ const KIND_DIR: Record<TemplateKind, string> = {
   "project-type": "project-types",
   stack: "stacks",
   database: "databases",
+  "vector-db": "vector-db",
   storage: "storage",
   auth: "auth",
   docker: "docker",
@@ -132,6 +135,7 @@ const TARGET_ROOT: Record<TemplateKind, (id: string) => string> = {
   "project-type": () => "",
   stack: () => "",
   database: () => "",
+  "vector-db": () => "",
   storage: () => "",
   auth: () => "",
   docker: () => "",
@@ -243,6 +247,7 @@ export async function listTemplates(kind: TemplateKind): Promise<TemplateMeta[]>
 export const listProjectTypes = () => listTemplates("project-type");
 export const listStacks = () => listTemplates("stack");
 export const listDatabases = () => listTemplates("database");
+export const listVectorDb = () => listTemplates("vector-db");
 export const listStorage = () => listTemplates("storage");
 export const listAuth = () => listTemplates("auth");
 export const listCi = () => listTemplates("ci");
