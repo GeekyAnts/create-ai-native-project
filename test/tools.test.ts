@@ -54,6 +54,7 @@ describe("instructionFiles", () => {
     expect(instructionFiles(["claude-code"])).toEqual(["CLAUDE.md"]);
     expect(instructionFiles(["codex"])).toEqual(["AGENTS.md"]);
     expect(instructionFiles(["opencode"])).toEqual(["AGENTS.md"]);
+    expect(instructionFiles(["cline"])).toEqual(["AGENTS.md"]);
     expect(instructionFiles(["claude-code", "codex"])).toEqual(["CLAUDE.md", "AGENTS.md"]);
     expect(instructionFiles(["codex", "opencode"])).toEqual(["AGENTS.md"]);
   });
@@ -152,6 +153,17 @@ describe("retargetForTools", () => {
     // Skill → opencode's own dir + codex's dir.
     expect(paths).toContain(".opencode/skills/eng/SKILL.md");
     expect(paths).toContain(".agents/skills/eng/SKILL.md");
+    // Passthrough file untouched.
+    expect(paths).toContain("src/index.ts");
+  });
+
+  it("maps a skill to a Cline workflow and skips agents for cline", () => {
+    const out = retargetForTools(files, ["cline"]);
+    const paths = out.map((f) => f.path);
+    // Skill's SKILL.md → .clinerules/workflows/<name>.md (a /slash command).
+    expect(paths).toContain(".clinerules/workflows/eng.md");
+    // Cline has no per-file subagent format → no agent files emitted.
+    expect(paths.some((p) => /\/agents\//.test(p))).toBe(false);
     // Passthrough file untouched.
     expect(paths).toContain("src/index.ts");
   });

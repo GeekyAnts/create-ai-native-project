@@ -6,6 +6,7 @@ any combination of:
 - **Claude Code**
 - **OpenAI Codex**
 - **OpenCode**
+- **Cline**
 
 The registry stores everything once, in Claude Code's native shape. At
 generation time each artifact is **retargeted / translated** into the layout the
@@ -14,12 +15,12 @@ maintaining three copies of anything.
 
 ## What each tool gets
 
-| Artifact | Claude Code | OpenCode | OpenAI Codex |
-| --- | --- | --- | --- |
-| **Instructions** | `CLAUDE.md` | `AGENTS.md` | `AGENTS.md` |
-| **Skills** (same `SKILL.md`) | `.claude/skills/<n>/` | reads `.claude/skills` natively | `.agents/skills/<n>/` |
-| **Subagents** | `.claude/agents/<n>.md` | `.opencode/agents/<n>.md` | `.codex/agents/<n>.toml` |
-| **Config** | — | `opencode.json` | — |
+| Artifact | Claude Code | OpenCode | OpenAI Codex | Cline |
+| --- | --- | --- | --- | --- |
+| **Instructions** | `CLAUDE.md` | `AGENTS.md` | `AGENTS.md` | `AGENTS.md` |
+| **Skills** (same `SKILL.md`) | `.claude/skills/<n>/` | reads `.claude/skills` natively | `.agents/skills/<n>/` | `.clinerules/workflows/<n>.md` |
+| **Subagents** | `.claude/agents/<n>.md` | `.opencode/agents/<n>.md` | `.codex/agents/<n>.toml` | — (no per-file agents) |
+| **Config** | — | `opencode.json` | — | — |
 
 When you select more than one tool, the instruction files share **identical**
 composed content, and skills aren't duplicated needlessly (OpenCode reads
@@ -30,8 +31,9 @@ composed content, and skills aren't duplicated needlessly (OpenCode reads
 The composed knowledge base is written to:
 
 - **`CLAUDE.md`** when Claude Code is selected.
-- **`AGENTS.md`** when Codex or OpenCode is selected (the cross-tool standard;
-  OpenCode also falls back to `CLAUDE.md`).
+- **`AGENTS.md`** when Codex, OpenCode, or Cline is selected (the cross-tool
+  standard; OpenCode also falls back to `CLAUDE.md`). Cline reads `AGENTS.md`
+  natively, so its instructions need no extra work.
 
 Both hold the same content and are appended to on re-runs.
 
