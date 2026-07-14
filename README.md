@@ -5,7 +5,9 @@ file (`CLAUDE.md` / `AGENTS.md`), reusable **skills** and **agents**, runnable
 **stack boilerplate**, **docker-compose**, and **CI** for **Claude Code, OpenAI
 Codex, and OpenCode** — all composed from a central template registry.
 
-📖 **[Documentation →](https://geekyants.github.io/create-ai-native-project/)**
+[![create-ai-native-project scaffolding a NestJS + Postgres project](https://raw.githubusercontent.com/GeekyAnts/create-ai-native-project/main/demo/wizard.gif)](https://geekyants.github.io/create-ai-native-project/guide/demos)
+
+📖 **[Documentation →](https://geekyants.github.io/create-ai-native-project/)** · ▶ **[More demos →](https://geekyants.github.io/create-ai-native-project/guide/demos)**
 
 ## Usage
 
