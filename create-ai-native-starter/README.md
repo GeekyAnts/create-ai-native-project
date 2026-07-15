@@ -22,4 +22,15 @@ dependency, pinned with a caret range). New minor/patch releases of the
 canonical CLI flow through automatically, so this alias rarely needs
 republishing.
 
+## Releasing
+
+Because it depends on `create-ai-native-project` with a caret range, this alias
+only needs republishing on a **major** bump of the canonical CLI. When that
+happens:
+
+1. Bump `version` in this folder's `package.json` (and the dependency range).
+2. Tag and push `starter-vX.Y.Z` — the `.github/workflows/publish-starter.yml`
+   workflow publishes it via npm Trusted Publishing (OIDC, no token). You can
+   also trigger that workflow manually from the Actions tab.
+
 Released under the MIT License. © GeekyAnts Inc
