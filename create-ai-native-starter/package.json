@@ -1,0 +1,42 @@
+{
+  "name": "create-ai-native-starter",
+  "version": "1.3.0",
+  "description": "Alias for create-ai-native-project — scaffold an AI-native project for Claude Code / Codex / OpenCode / Cline. Runs the same interactive wizard via `npm create ai-native-starter`.",
+  "keywords": [
+    "ai-native",
+    "claude",
+    "claude-code",
+    "codex",
+    "opencode",
+    "cline",
+    "scaffold",
+    "create",
+    "mcp",
+    "agents.md"
+  ],
+  "license": "MIT",
+  "author": "GeekyAnts",
+  "homepage": "https://geekyants.github.io/create-ai-native-project/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GeekyAnts/create-ai-native-project.git",
+    "directory": "create-ai-native-starter"
+  },
+  "bugs": {
+    "url": "https://github.com/GeekyAnts/create-ai-native-project/issues"
+  },
+  "type": "module",
+  "bin": {
+    "create-ai-native-starter": "index.js"
+  },
+  "files": [
+    "index.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20.12"
+  },
+  "dependencies": {
+    "create-ai-native-project": "^1.3.0"
+  }
+}
