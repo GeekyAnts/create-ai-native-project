@@ -22,6 +22,9 @@ npx create-ai-native-project --boot my-app
 npx create-ai-native-project update
 ```
 
+> Also published as the alias **[`create-ai-native-starter`](./create-ai-native-starter)**
+> — `npm create ai-native-starter` runs the exact same wizard.
+
 - **Bare run** — detects whether you're in an existing project. New folder →
   asks for a name and scaffolds; existing project → *adds* to it, never
   overwriting your files (new selections are **appended/merged** into
