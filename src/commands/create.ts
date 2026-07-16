@@ -27,6 +27,7 @@ import {
   type TemplateRef,
 } from "../lib/templates.js";
 import { composeClaudeMd, type ProjectMeta } from "../lib/claudemd.js";
+import { composeKnowledgeBundle } from "../lib/knowledge.js";
 import {
   composePackageJson,
   mergeFirstWins,
@@ -499,6 +500,13 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
           if (added.length > 0) merge(result, await writeFile(targetDir, fname, content, true));
         }
       }
+
+      // OKF `knowledge/` bundle — mirrors the instructions file as concept files.
+      // Composed from the effective (merged) refs so add-runs pick up new areas.
+      merge(
+        result,
+        await writeKnowledgeBundle(targetDir, isAdd ? mergedRefs : refs, projectMeta, mode === "new"),
+      );
     }
 
     // package.json: compose fresh, or merge new stack fragments in (existing wins).
@@ -1029,6 +1037,15 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
       }
     }
 
+    // OKF `knowledge/` bundle — one concept per app stack + workspace section.
+    if (includeClaudeMd) {
+      const stackRefs = [...new Set((isAdd ? mergedApps : apps).map((a) => a.stack))].map(
+        (id) => ({ kind: "stack" as const, id }),
+      );
+      const bundleRefs = [...stackRefs, ...(isAdd ? mergedRefs : sectionRefs)];
+      merge(result, await writeKnowledgeBundle(targetDir, bundleRefs, ctx.meta, mode === "new"));
+    }
+
     // MCP servers + opencode.json (single writer for both new and add runs).
     merge(result, await writeMcpConfigs(targetDir, mergedMcp, ctx.tools));
     build.stop(`Wrote ${result.written.length} file(s) across ${apps.length} app(s).`);
@@ -1110,6 +1127,26 @@ function writeFile(
   overwrite: boolean,
 ): Promise<WriteResult> {
   return writeTemplateFiles(targetDir, [{ path, contents }], { overwrite });
+}
+
+/**
+ * Write the OKF `knowledge/` bundle (composed from the given section refs).
+ * Navigation index.md files are regenerated every run (pure listings, always
+ * overwritten so new selections show up); overview/log/concept files are written
+ * create-once (`freshContent` only on a new project) so an existing project's
+ * bundle content is never clobbered on add-runs.
+ */
+async function writeKnowledgeBundle(
+  targetDir: string,
+  refs: TemplateRef[],
+  meta: ProjectMeta,
+  freshContent: boolean,
+): Promise<WriteResult> {
+  const { nav, content } = await composeKnowledgeBundle(refs, meta);
+  const result: WriteResult = { written: [], skipped: [] };
+  merge(result, await writeTemplateFiles(targetDir, nav, { overwrite: true }));
+  merge(result, await writeTemplateFiles(targetDir, content, { overwrite: freshContent }));
+  return result;
 }
 
 async function copy(
