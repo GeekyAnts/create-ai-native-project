@@ -62,6 +62,10 @@ to npm; run via `npm create ai-native-project`.
 
 ## 3. Recent
 
+- **2026-07-16 · v1.4.1** — Windows install fix (`execFile` + `.cmd` shims);
+  dep refresh (clack 1.x, commander 15, TS 7); Cline in package description.
+  Registry: all pinned versions bumped to latest stable
+  ([registry PR #33](https://github.com/GeekyAnts/agentic-coding-registry/pull/33)).
 - **2026-07-16 · v1.4.0** — OKF `knowledge/` bundle now scaffolded into every
   project (`lib/knowledge.ts`); OKF label corrected (Foundation → Format).
 - **2026-07-15** — npm alias `create-ai-native-starter`.

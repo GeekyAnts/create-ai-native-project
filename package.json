@@ -1,7 +1,7 @@
 {
   "name": "create-ai-native-project",
-  "version": "1.4.0",
-  "description": "Interactive CLI to scaffold AI-native projects for Claude Code, OpenAI Codex, and OpenCode — instructions, skills, agents, stacks, Docker, and CI",
+  "version": "1.4.1",
+  "description": "Interactive CLI to scaffold AI-native projects for Claude Code, OpenAI Codex, OpenCode, and Cline — instructions, skills, agents, stacks, Docker, and CI",
   "type": "module",
   "bin": {
     "create-ai-native-project": "dist/index.js"
@@ -28,6 +28,7 @@
     "claude-code",
     "codex",
     "opencode",
+    "cline",
     "agents.md",
     "cli",
     "scaffold",
@@ -45,15 +46,15 @@
   },
   "homepage": "https://github.com/GeekyAnts/create-ai-native-project#readme",
   "dependencies": {
-    "@clack/prompts": "^0.7.0",
-    "commander": "^12.1.0",
-    "picocolors": "^1.1.0"
+    "@clack/prompts": "^1.7.0",
+    "commander": "^15.0.0",
+    "picocolors": "^1.1.1"
   },
   "devDependencies": {
-    "@types/node": "^22.7.0",
-    "tsup": "^8.3.0",
-    "tsx": "^4.19.0",
-    "typescript": "^5.6.0",
+    "@types/node": "^24.13.3",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2",
     "vitepress": "^1.6.4",
     "vitest": "^4.1.10"
   }

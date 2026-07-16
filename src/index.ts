@@ -15,7 +15,7 @@ const program = new Command();
 program
   .name("create-ai-native-project")
   .description(
-    "Interactive CLI to scaffold AI-native projects for Claude Code, OpenAI Codex, and OpenCode — instructions, skills, agents, stacks, Docker, and CI",
+    "Interactive CLI to scaffold AI-native projects for Claude Code, OpenAI Codex, OpenCode, and Cline — instructions, skills, agents, stacks, Docker, and CI",
   )
   .version(VERSION)
   .option("--boot <project-name>", "create a new folder and scaffold into it")

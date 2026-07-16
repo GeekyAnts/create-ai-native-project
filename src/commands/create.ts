@@ -143,7 +143,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     const name = await p.text({
       message: "New project folder name?",
       placeholder: "my-ai-app",
-      validate: (v) => (v.trim().length === 0 ? "Name is required" : undefined),
+      validate: (v) => (!v || v.trim().length === 0 ? "Name is required" : undefined),
     });
     if (p.isCancel(name)) return p.cancel("Cancelled.");
     targetDir = resolve(name);
@@ -172,7 +172,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     message: "Project name?",
     placeholder: defaultName,
     initialValue: defaultName,
-    validate: (v) => (v.trim().length === 0 ? "Name is required" : undefined),
+    validate: (v) => (!v || v.trim().length === 0 ? "Name is required" : undefined),
   });
   if (p.isCancel(nameInput)) return p.cancel("Cancelled.");
   const projectName = nameInput.trim();
@@ -603,7 +603,7 @@ export async function createCommand(opts: CreateOptions): Promise<void> {
     }
     build.stop(`Wrote ${result.written.length} file(s).`);
   } catch (err) {
-    build.stop(pc.red("Scaffolding failed."));
+    build.error("Scaffolding failed.");
     p.log.error(String(err instanceof Error ? err.message : err));
     return;
   }
@@ -794,7 +794,7 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
     const nameInput = await p.text({
       message: `App name (under apps/${group}/)?`,
       placeholder: "website",
-      validate: (v) => (v.trim().length === 0 ? "Name is required" : undefined),
+      validate: (v) => (!v || v.trim().length === 0 ? "Name is required" : undefined),
     });
     if (p.isCancel(nameInput)) return p.cancel("Cancelled.");
     const name = slugSegment(nameInput);
@@ -1050,7 +1050,7 @@ async function runMonorepoFlow(ctx: MonorepoContext): Promise<void> {
     merge(result, await writeMcpConfigs(targetDir, mergedMcp, ctx.tools));
     build.stop(`Wrote ${result.written.length} file(s) across ${apps.length} app(s).`);
   } catch (err) {
-    build.stop(pc.red("Scaffolding failed."));
+    build.error("Scaffolding failed.");
     p.log.error(String(err instanceof Error ? err.message : err));
     return;
   }

@@ -112,6 +112,7 @@ and the template registry's README for how to contribute templates.
 Notable releases — newest first. Full history and release notes on
 [GitHub Releases](https://github.com/GeekyAnts/create-ai-native-project/releases).
 
+- **1.4.1** — Windows dependency-install fix; dependency refresh (clack 1.x, commander 15, TypeScript 7); Cline added to the package description.
 - **1.4.0** — OKF (Open Knowledge Format) `knowledge/` bundle scaffolded into every project.
 - **1.3.0** — MCP-servers kind: preconfigure Model Context Protocol servers per tool.
 - **1.2.1** — Terminal demos (VHS) + published docs site.
