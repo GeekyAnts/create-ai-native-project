@@ -12,7 +12,7 @@ export async function updateCommand(): Promise<void> {
     const path = await updateRegistry();
     spin.stop(`Registry up to date at ${pc.dim(path)}`);
   } catch (err) {
-    spin.stop(pc.red("Update failed."));
+    spin.error("Update failed.");
     p.log.error(String(err instanceof Error ? err.message : err));
     return;
   }
