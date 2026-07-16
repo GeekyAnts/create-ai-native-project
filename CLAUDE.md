@@ -17,10 +17,16 @@
 > base for the project. Keep it continuously updated as the project evolves.
 > Whenever new project details, decisions, or context are discussed, capture
 > them here (primarily in [§9 Project](#9-project)) and keep all sections current.
+>
+> **On every release, also update [`README.md`](README.md)'s Changelog** with an
+> entry for the new version (newest first) summarizing its notable changes — do
+> this as part of the release flow (bump version → update Changelog → cut the
+> `vX.Y.Z` GitHub Release).
 
-| Task                                   | Priority | Status  |
-| -------------------------------------- | -------- | ------- |
-| Keep CLAUDE.md updated as we go        | High ⭐  | Ongoing |
+| Task                                        | Priority | Status  |
+| ------------------------------------------- | -------- | ------- |
+| Keep CLAUDE.md updated as we go             | High ⭐  | Ongoing |
+| Update README.md Changelog on each release  | High ⭐  | Ongoing |
 
 ---
 

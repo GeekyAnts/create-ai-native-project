@@ -107,6 +107,18 @@ npm run build      # tsup → dist/
 Requires Node **≥ 20.12**. See `CLAUDE.md` for the full project knowledge base
 and the template registry's README for how to contribute templates.
 
+## Changelog
+
+Notable releases — newest first. Full history and release notes on
+[GitHub Releases](https://github.com/GeekyAnts/create-ai-native-project/releases).
+
+- **1.4.0** — OKF (Open Knowledge Format) `knowledge/` bundle scaffolded into every project.
+- **1.3.0** — MCP-servers kind: preconfigure Model Context Protocol servers per tool.
+- **1.2.1** — Terminal demos (VHS) + published docs site.
+- **1.2.0** — Project name + brief prompts, injected into the generated instructions file.
+- **1.1.0** — Security-standards kind (7 priority groups) + security skill/agents.
+- **1.0.0** — v1 registry expansion: AI-native stacks, vector-db, ORM, IaC, the Cline target, and more frameworks.
+
 ## Built by GeekyAnts
 
 `create-ai-native-project` is built and maintained by **[GeekyAnts](https://geekyants.com)**,
