@@ -112,6 +112,7 @@ and the template registry's README for how to contribute templates.
 Notable releases — newest first. Full history and release notes on
 [GitHub Releases](https://github.com/GeekyAnts/create-ai-native-project/releases).
 
+- **1.4.2** — Scaffolded instructions (`CLAUDE.md` / `AGENTS.md`) now include a **Knowledge Base (OKF)** section across all project shapes — how to maintain the `knowledge/` bundle (frontmatter/body conventions, reserved files, guardrails, `okflint`), plus a directive to read `knowledge/` before searching the codebase ([registry PR #34](https://github.com/GeekyAnts/agentic-coding-registry/pull/34)).
 - **1.4.1** — Windows dependency-install fix; dependency refresh (clack 1.x, commander 15, TypeScript 7); Cline added to the package description.
 - **1.4.0** — OKF (Open Knowledge Format) `knowledge/` bundle scaffolded into every project.
 - **1.3.0** — MCP-servers kind: preconfigure Model Context Protocol servers per tool.

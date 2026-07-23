@@ -62,6 +62,10 @@ to npm; run via `npm create ai-native-project`.
 
 ## 3. Recent
 
+- **2026-07-23 · v1.4.2** — Base `CLAUDE.md`/`AGENTS.md` templates gained a
+  **Knowledge Base (OKF)** section across all three shapes (default/single/monorepo):
+  how to maintain the `knowledge/` bundle + read it before searching
+  ([registry PR #34](https://github.com/GeekyAnts/agentic-coding-registry/pull/34)).
 - **2026-07-16 · v1.4.1** — Windows install fix (`execFile` + `.cmd` shims);
   dep refresh (clack 1.x, commander 15, TS 7); Cline in package description.
   Registry: all pinned versions bumped to latest stable

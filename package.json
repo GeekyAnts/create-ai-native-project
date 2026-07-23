@@ -1,6 +1,6 @@
 {
   "name": "create-ai-native-project",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Interactive CLI to scaffold AI-native projects for Claude Code, OpenAI Codex, OpenCode, and Cline — instructions, skills, agents, stacks, Docker, and CI",
   "type": "module",
   "bin": {
